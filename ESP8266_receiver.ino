@@ -1,5 +1,5 @@
 /*
-  PC to ESP module for communication using telnet
+  Establishing communication between the ESP and PC running the PC_Wifi_Receiver.c program
 */
 
 #include <ESP8266WiFi.h>
