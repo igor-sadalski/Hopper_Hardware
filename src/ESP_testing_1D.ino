@@ -11,7 +11,7 @@ WiFiServer server(port);
 
 //Server connect to WiFi Network
 const char *ssid = "NETGEAR35";        //Enter your wifi SSID
-const char *password = "amberlab";  //Enter your wifi Password
+const char *password = "change_me";  //Enter your wifi Password
 
 int count=0;
 //=======================================================================
