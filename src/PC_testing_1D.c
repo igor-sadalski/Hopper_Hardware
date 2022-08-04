@@ -3,30 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+
+#include <PC_testing_fun.h>
+
 #define MAX 80
 #define PORT 8888
 #define SA struct sockaddr
-void func(int sockfd)
-{
-	char buff[MAX];
-	int n;
-	for (;;) {
-		bzero(buff, sizeof(buff));
-		printf("Enter the string : ");
-		n = 0;
-		while ((buff[n++] = getchar()) != '\n')
-			;
-		write(sockfd, buff, sizeof(buff));
-		bzero(buff, sizeof(buff));
-		read(sockfd, buff, sizeof(buff));
-		printf("From Server : %s", buff);
-		if ((strncmp(buff, "exit", 4)) == 0) {
-			printf("Client Exit...\n");
-			break;
-		}
-	}
-}
-
 int main()
 {
 	int sockfd, connfd;
@@ -44,7 +26,7 @@ int main()
 
 	// assign IP, PORT
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = inet_addr("192.168.1.2"); //CHANGE this based on arduino output
+	servaddr.sin_addr.s_addr = inet_addr("192.168.1.2"); 
 	servaddr.sin_port = htons(PORT);
 
 	// connect the client socket to server socket
