@@ -2,6 +2,8 @@
   PC to ESP module for communication using telnet
 */
 
+//if using in a different folder remember to go to preference and change the folder default location
+
 #include <ESP8266WiFi.h>
 
 #define SendKey 0  //Button to send data Flash BTN on NodeMCU
@@ -14,6 +16,7 @@ const char *ssid = "NETGEAR35";        //Enter your wifi SSID
 const char *password = "change_me";  //Enter your wifi Password
 
 int count=0;
+
 //=======================================================================
 //                    Power on setup
 //=======================================================================
