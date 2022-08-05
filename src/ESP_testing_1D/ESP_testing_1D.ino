@@ -101,13 +101,10 @@ void loop() {
       while(Serial.available() > 0) {
         // client.write(): send series of bytes to server for client to see
         // Serial.read(): read bytes from Serial data
-        client.write(Serial.read());
+        client.write(Serial1.read());
+        delay(1000);
       }
     }
-
-    
-
-    // client has disconnected from server
     client.stop();
     Serial.println("Client disconnected");    
   }  
