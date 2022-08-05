@@ -1,78 +1,115 @@
-#include <ESP8266WiFi.h>
+/*
+ * working two way communication ESP to Telnet
+ * with additional info about processes in between 
+ * two machines
+ */
 
-#define BAUD 115200 
+#include <ESP8266WiFi.h> 
 
-int port = 8888;  //Port number
-WiFiServer server(port);
-// Set random static IP address, gateway IP address, subnet
-IPAddress local_IP(192, 168, 1, 2); //ip to which pc should connect
-IPAddress gateway(192, 168, 1, 1); //randomly allocated
-IPAddress subnet(255, 255, 0, 0); //randomly allocated
-
-//Server connect to WiFi Network
+// Info for which network ESP8266 will connect to
 const char *ssid = "NETGEAR35";        //Enter your wifi SSID
 const char *password = "amberlab";  //Enter your wifi Password
 
-int count=0;
+// Set up TCP server and port number
+int port = 8888;
+WiFiServer server(port);
 
-void setup() 
-{
-  Serial.begin(BAUD); //setup baud rate must be the same as for the pc receiver
-  Serial.println();
+// Set static IP address, gateway IP address, subnet
+IPAddress local_IP(192, 168, 1, 2);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 0, 0);
 
+//=====================================================================
+//      WiFi Setup
+//=====================================================================
+
+void setup() {
+  
+  // Begin USB Serial
+  Serial.begin(115200);
+
+  // configure static IP address
+  if (!WiFi.config(local_IP, gateway, subnet)) {
+    Serial.println("STA Failed to configure");
+  }
+
+  // Set to Station mode. ESP8266 connects to desired network
   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password); //Connect to wifi
- 
-  // Wait for connection  
-  Serial.println("Connecting to Wifi");
-  while (WiFi.status() != WL_CONNECTED) {   
-    delay(500);
-    Serial.print(".");
+  WiFi.begin(ssid, password);
+
+  // Wait until connection to desired network is confirmed
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print("Attempting to connect to "); 
+    Serial.print(ssid); Serial.println("..."); 
     delay(500);
   }
 
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
+  // Succeeded in connecting to desired network (i.e, local area network LAN)
+  Serial.println();
+  Serial.println("Success!");
+  Serial.print("Conneceted to "); Serial.println(ssid);
 
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP()); //shouldnt we spacify here address again?
+  // Turn on built-in LED to show successful connection
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+
+  // Begin TCP server after succesful connection
   server.begin();
-  Serial.print("Open Telnet and connect to IP:");
-  Serial.print(WiFi.localIP());
-  Serial.print(" on port ");
-  Serial.println(port);
+
+  // Instructions to connect to Wifi
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  
+  Serial.println("Open Telnet and connect to IP on terminal:");
+  Serial.print("$ telnet "); Serial.print(WiFi.localIP());
+  Serial.print(" "); Serial.println(port);
 }
 
-void loop() 
-{
-  //=======================================================
-  //                 RX/TX RECEPTION
-  //=======================================================
+
+//=====================================================================
+//      Client - Server Interactions
+//=====================================================================
+
+void loop() {
   
-  //=======================================================
-  //                 WIFI SENDING
-  //=======================================================
+  // Gets a client that is connected to the server 
+  // and has data available for reading
   WiFiClient client = server.available();
-  
+
+  // check if client is connected (your PC)
   if (client) {
-    if(client.connected())
-    {
-      Serial.println("Client Connected");
+
+    // print confirmation message
+    if(client.connected()) {
+      Serial.println("Client Connected:");
+      Serial.println(client);
     }
-    
+
+    // routine while client is connected (BIDIRECTIONAL COMMS HERE!)
     while(client.connected()){      
-      while(client.available()>0){
-        // read data from the connected client
+
+      // Receive data from connected client
+      // Bytes available coming from client
+      while(client.available() > 0) {
+        // Serial.write(): send series of bytes to serial port
+        // client.read(): read next byte from client data
         Serial.write(client.read()); 
       }
-      //Send Data to connected client
-      while(Serial.available()>0)
-      {
+      
+      // Send data to connected client
+      // Arduino has bytes to send to client
+      while(Serial.available() > 0) {
+        // client.write(): send series of bytes to server for client to see
+        // Serial.read(): read bytes from Serial data
         client.write(Serial.read());
       }
     }
+
+    
+
+    // client has disconnected from server
     client.stop();
     Serial.println("Client disconnected");    
-  }
+  }  
+  
 }
