@@ -58,7 +58,14 @@ int main()
 		printf("connected to the server..\n");
 
 	// function for chat
-	func(sockfd);
+	char buff[MAX];
+	while(1){
+		bzero(buff, sizeof(buff));
+		read(sockfd, buff, sizeof(buff));
+		printf("%s \n", buff);
+		
+		
+	}
 
 	// close the socket
 	close(sockfd);
