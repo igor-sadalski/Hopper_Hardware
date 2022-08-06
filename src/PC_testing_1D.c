@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-//#include <time.h>
 
 #define MAX 80
 #define PORT 8888
@@ -39,27 +38,18 @@ int main()
 
 	// function for chat
 	char buff[MAX];
-	char send_buff[10] = "<from PC>";
-	
-	//struct timespec tstart={0,0}, tend={0,0};
-	    
-	    
+	char send_buff[10] = "<from PC>"; //edit this to what the actual output buffor will be
+	        
 	while(1){
-		//clock_gettime(CLOCK_MONOTONIC, &tstart);
-		
-		
 		bzero(buff, sizeof(buff));
+		
+		receive string states, ESP8266 -> PC
 		read(sockfd, buff, sizeof(buff));
 		printf("%s \n", buff);
-		write(sockfd, send_buff, sizeof(send_buff));
 		
-		
-		//clock_gettime(CLOCK_MONOTONIC, &tend);
-	    //printf("some_long_computation took about %.5f seconds\n",
-           //((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
-           //((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec));
+		//send string torques, ESP8266 <- PC
+		write(sockfd, send_buff, sizeof(send_buff));		
 	}
 
-	// close the socket
 	close(sockfd);
 }
