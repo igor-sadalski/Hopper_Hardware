@@ -19,7 +19,10 @@ IPAddress subnet(255, 255, 0, 0);
 void setup() {
   
   // Begin USB Serial
-  Serial.begin(115200); //T41-ESP baud rates must be the same
+ delay(100);                    //give time to open and write
+  Serial.begin(115200);        //this is for the monitor
+  Serial1.begin(115200); 
+  delay(100);                 //T41-ESP baud rates must be the same
 
   // configure static IP address
   if (!WiFi.config(local_IP, gateway, subnet)) {
@@ -37,19 +40,28 @@ void setup() {
 
 void loop() {
   WiFiClient client = server.available();
+  
   if (client) {
-    while(client.connected()){      
-      while(Serial.available() > 0){
-        //this achieves two way communication of sending strings
+    
+    while(client.connected()){     
+       
+      while(Serial1.available() > 0){
+
+        //send string states, ESP8266 ->  PC
+        while (Serial1.available() > 0) {
+          char c1 = Serial1.read();
+          client.write(c1);
+        }
+        // client.write("from esp"); //erase 1 from all serials
+
+         //send string torques, T41 <- ESP8266
         while (client.available()) {
           char c = client.read();
-          Serial.write(c);
+          Serial1.write(c);
         }
-        client.write("<from esp>");
-        delay(1000); //adjust this during execution
+        delay(0); //adjust this during execution
         }
     }
     client.stop();
   }  
-  
 }
