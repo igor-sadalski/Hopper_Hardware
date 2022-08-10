@@ -39,7 +39,7 @@ int main()
 	// function for chat
 	char buff[MAX];
 	//cannot use spaces or special characters in the string message as the program otherwise freaks out
-	char send_buff[MAX] = "<{7777777777}>"; //edit this to what the actual output buffor will be
+	char send_buff[MAX] = "<{pcpcpcpcp}>"; //edit this to what the actual output buffor will be
 	        
 	while(1){
 		bzero(buff, sizeof(buff));
