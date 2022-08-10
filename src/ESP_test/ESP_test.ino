@@ -16,10 +16,16 @@ IPAddress local_IP(192, 168, 1, 2);
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 
+const byte numChars = 32;
+char receivedCharsTeensy[numChars]; //change here to get more charactes in the string
+char receivedCharsPC[numChars]; //change here to get more charactes in the string
+boolean newDataTeensy = false;
+boolean newDataPC = false;
+
 void setup() {
   
   // Begin USB Serial
- delay(100);                    //give time to open and write
+ delay(100);                    //give time to open and print
   Serial.begin(115200);        //this is for the monitor
   Serial1.begin(115200); 
   delay(100);                 //T41-ESP baud rates must be the same
@@ -35,7 +41,6 @@ void setup() {
   
   //beging server
   server.begin();
-  
 }
 
 void loop() {
@@ -44,24 +49,93 @@ void loop() {
   if (client) {
     
     while(client.connected()){     
-       
-      while(Serial1.available() > 0){
-
-        //send string states, ESP8266 ->  PC
-        while (Serial1.available() > 0) {
-          char c1 = Serial1.read();
-          client.write(c1);
+      
+        client.println("From T41 to PC: "); ReadMessageFromTeensy(); 
+        
+        //send whenready + debugging
+        if (newDataTeensy == true) {
+           client.print(receivedCharsTeensy); //client.println() is client.write() for strings and with endl
+           Serial.println(receivedCharsTeensy); //for debugging
+           newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
-        // client.write("from esp"); //erase 1 from all serials
-
-         //send string torques, T41 <- ESP8266
-        while (client.available()) {
-          char c = client.read();
-          Serial1.write(c);
+        
+        client.println("From PC to T41: "); ReadMessageFromPC(client);
+        if (newDataPC == true) {
+           client.print(receivedCharsPC); //client.println() is client.write() for strings and with endl
+           Serial.println(receivedCharsPC); //for debugging
+           newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
-        delay(0); //adjust this during execution
-        }
+        delay(1000);
+        
     }
     client.stop();
-  }  
+  }
+}  
+
+//this reads the messages that start with "<" and end with ">"
+//these two functions look scary but are nearly idential and simple
+void ReadMessageFromTeensy() {
+    static boolean recvInProgress = false;
+    static byte ndx = 0;
+    char startMarker = '<';
+    char endMarker = '>';
+    char rc;
+
+    while (Serial1.available() > 0 && newDataTeensy == false) {
+        rc = Serial1.read();
+
+        if (recvInProgress == true) {
+            if (rc != endMarker) {
+                receivedCharsTeensy[ndx] = rc;
+                ndx++;
+                if (ndx >= numChars) {
+                    ndx = numChars - 1;
+                }
+            }
+            else {
+                receivedCharsTeensy[ndx] = '\0'; // terminate the string
+                recvInProgress = false;
+                ndx = 0;
+                newDataTeensy = true;
+            }
+        }
+
+        else if (rc == startMarker) {
+            recvInProgress = true;
+        }
+    }
+}
+
+//ReadMessageFromTeensy differs from ReadMessageFromTeensy 
+//by using different soure of where to read info from
+void ReadMessageFromPC(WiFiClient client) {
+    static boolean recvInProgress = false;
+    static byte ndx = 0;
+    char startMarker = '<';
+    char endMarker = '>';
+    char rc;
+
+    while (client.available() > 0 && newDataPC == false) {
+        rc = client.read();
+
+        if (recvInProgress == true) {
+            if (rc != endMarker) {
+                receivedCharsPC [ndx] = rc;
+                ndx++;
+                if (ndx >= numChars) {
+                    ndx = numChars - 1;
+                }
+            }
+            else {
+                receivedCharsPC[ndx] = '\0'; // terminate the string
+                recvInProgress = false;
+                ndx = 0;
+                newDataPC = true;
+            }
+        }
+
+        else if (rc == startMarker) {
+            recvInProgress = true;
+        }
+    }
 }
