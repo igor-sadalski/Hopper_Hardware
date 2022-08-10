@@ -57,20 +57,13 @@ void loop() {
     while(client.connected()){  
 
         client.print("-------From T41 to PC-------"); ReadMessageFromTeensy();
-        client.print("Is serial1 ready:"); client.println(Serial);
-        client.print("Is there data in buffor:"); client.println(Serial.available());
-        client.print("Is there a MESSEAGE in buffir:"); client.println(newDataTeensy);
-        //send when ready
         if (newDataTeensy == true) {
-          client.print("message T41 to ESP:"); client.println(receivedCharsTeensy);
+          client.println(receivedCharsTeensy);
            newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
-        client.println("-------From PC to T41-------"); ReadMessageFromPC(client);
-        client.print("Is client available"); client.println(client.available());
-        client.print("new data from PC:"); client.println(newDataPC);
+        ReadMessageFromPC(client);
         if (newDataPC == true) {
-           client.print("message PC to ESP:"); client.println(receivedCharsPC); //for debugging
            Serial.println(receivedCharsPC);
            newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
