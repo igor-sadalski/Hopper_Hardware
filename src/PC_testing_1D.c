@@ -42,14 +42,20 @@ int main()
 	        
 	while(1){
 		bzero(buff, sizeof(buff));
-		
-		receive string states, ESP8266 -> PC
-		read(sockfd, buff, sizeof(buff));
-		printf("%s \n", buff);
-		
+
 		//send string torques, ESP8266 <- PC
-		write(sockfd, send_buff, sizeof(send_buff));		
+		write(sockfd, send_buff, sizeof(send_buff));
+		
+		//receive string states, ESP8266 -> PC
+		read(sockfd, buff, sizeof(buff));
+		printf("%s \n", buff);	
+		
+		//here will also go function to detokenize the string
+		//into set of controller usable floats
+		//its in libs in my github
 	}
 
 	close(sockfd);
+	
+	
 }
