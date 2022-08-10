@@ -15,11 +15,9 @@ void setup() {
 }
 
 void loop() {
-    Serial.println("----Sending message to ESP/Teensy----");
-    Serial.print("Is Serial1 ready:"); Serial.println(Serial1);
-    Serial1.println("<teensyteensy>");
-    Serial.println("-----Receiving from PC/ESP:------ "); ReadMessage(); 
-    Serial.print("new data from ESP:"); Serial.println(Serial1.available());
+    Serial1.println("<teensyteensyteensyteensy>");
+    Serial.println("-----Receiving from ESP << PC------ "); 
+    ReadMessage(); 
     if (newData == true) {
        Serial.println(receivedChars);
        newData = false;
