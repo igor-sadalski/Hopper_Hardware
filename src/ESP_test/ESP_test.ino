@@ -26,10 +26,9 @@ void setup() {
   
   // Begin USB Serial
   delay(100);                    //give time to open serial
-  Serial.begin(115200);        //this is for the monitor
-  Serial1.begin(115200);        //baud - data rate in bits per second (baud) for serial data transmission
+  Serial.begin(115200);        //there is only one serial on esp!!!
   // wait for serial port to connect. Needed for native USB
-  while (!Serial1) {;}
+  while (!Serial) {;}
   delay(100);                  //baud rates at both ends must match!!
 
   // configure static IP address
@@ -43,6 +42,10 @@ void setup() {
   
   //beging server
   server.begin();
+
+  //start a diode to be sure all is working
+  pinMode(LED_BUILTIN,OUTPUT);
+  digitalWrite(LED_BUILTIN,LOW); //to start the diode on ESP turn it to low
 }
 
 void loop() {
@@ -54,9 +57,9 @@ void loop() {
     while(client.connected()){  
 
         client.print("-------From T41 to PC-------"); ReadMessageFromTeensy();
-        client.print("Is serial1 ready:"); client.println(Serial1);
-        client.print("Is there data in buffor:"); client.println(Serial1.available());
-        client.print("new data from teensy:"); client.println(newDataTeensy);
+        client.print("Is serial1 ready:"); client.println(Serial);
+        client.print("Is there data in buffor:"); client.println(Serial.available());
+        client.print("Is there a MESSEAGE in buffir:"); client.println(newDataTeensy);
         //send when ready
         if (newDataTeensy == true) {
           client.print("message T41 to ESP:"); client.println(receivedCharsTeensy);
@@ -88,8 +91,8 @@ void ReadMessageFromTeensy() {
     char endMarker = '>';
     char rc;
 
-    while (Serial1.available() > 0 && newDataTeensy == false) {
-        rc = Serial1.read();
+    while (Serial.available() > 0 && newDataTeensy == false) {
+        rc = Serial.read();
 
         if (recvInProgress == true) {
             if (rc != endMarker) {
@@ -146,3 +149,5 @@ void ReadMessageFromPC(WiFiClient client) {
         }
     }
 }
+
+
