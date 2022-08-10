@@ -2,7 +2,7 @@
  * working two way communication ESP to PC sending strings
 */
 
-#include <ESP8266WiFi.h> 
+#include <ESP8266WiFi.h> //lib for esp chipp
 
 const char *ssid = "NETGEAR35";   
 const char *password = "amberlab"; 
@@ -12,23 +12,25 @@ int port = 8888;
 WiFiServer server(port);
 
 // Set static IP address, gateway IP address, subnet
-IPAddress local_IP(192, 168, 1, 2);
+IPAddress local_IP(192, 168, 1, 2); //this will be assigned to the ESP
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 
-const byte numChars = 32;
-char receivedCharsTeensy[numChars]; //change here to get more charactes in the string
-char receivedCharsPC[numChars]; //change here to get more charactes in the string
+const byte numChars = 32; //size of the message we expect to receive
+char receivedCharsTeensy[numChars];
+char receivedCharsPC[numChars]; 
 boolean newDataTeensy = false;
 boolean newDataPC = false;
 
 void setup() {
   
   // Begin USB Serial
- delay(100);                    //give time to open and print
+  delay(100);                    //give time to open serial
   Serial.begin(115200);        //this is for the monitor
-  Serial1.begin(115200); 
-  delay(100);                 //T41-ESP baud rates must be the same
+  Serial1.begin(115200);        //baud - data rate in bits per second (baud) for serial data transmission
+  // wait for serial port to connect. Needed for native USB
+  while (!Serial1) {;}
+  delay(100);                  //baud rates at both ends must match!!
 
   // configure static IP address
   if (!WiFi.config(local_IP, gateway, subnet)) {
@@ -44,27 +46,32 @@ void setup() {
 }
 
 void loop() {
+  
   WiFiClient client = server.available();
   
   if (client) {
     
-    while(client.connected()){     
-      
-        client.println("From T41 to PC: "); ReadMessageFromTeensy(); 
-        
-        //send whenready + debugging
+    while(client.connected()){  
+
+        client.print("-------From T41 to PC-------"); ReadMessageFromTeensy();
+        client.print("Is serial1 ready:"); client.println(Serial1);
+        client.print("Is there data in buffor:"); client.println(Serial1.available());
+        client.print("new data from teensy:"); client.println(newDataTeensy);
+        //send when ready
         if (newDataTeensy == true) {
-           client.print(receivedCharsTeensy); //client.println() is client.write() for strings and with endl
-           Serial.println(receivedCharsTeensy); //for debugging
+          client.print("message T41 to ESP:"); client.println(receivedCharsTeensy);
            newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
-        client.println("From PC to T41: "); ReadMessageFromPC(client);
+        client.println("-------From PC to T41-------"); ReadMessageFromPC(client);
+        client.print("Is client available"); client.println(client.available());
+        client.print("new data from PC:"); client.println(newDataPC);
         if (newDataPC == true) {
-           client.print(receivedCharsPC); //client.println() is client.write() for strings and with endl
-           Serial.println(receivedCharsPC); //for debugging
+           client.print("message PC to ESP:"); client.println(receivedCharsPC); //for debugging
+           Serial.println(receivedCharsPC);
            newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
+        
         delay(1000);
         
     }
