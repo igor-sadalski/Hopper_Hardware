@@ -8,18 +8,23 @@ void setup() {
   Serial1.begin(115200); //baud rates must be the same
   while (!Serial1) {;}
   delay(100);
+  
+  //start a diode to be sure all is working
+  pinMode(LED_BUILTIN,OUTPUT);
+  digitalWrite(LED_BUILTIN,HIGH);
 }
 
 void loop() {
     Serial.println("----Sending message to ESP/Teensy----");
     Serial.print("Is Serial1 ready:"); Serial.println(Serial1);
-    Serial1.println("<fromteensy>");
+    Serial1.println("<teensyteensy>");
     Serial.println("-----Receiving from PC/ESP:------ "); ReadMessage(); 
     Serial.print("new data from ESP:"); Serial.println(Serial1.available());
     if (newData == true) {
        Serial.println(receivedChars);
        newData = false;
     }
+    
     delay(1000);
 }
 
