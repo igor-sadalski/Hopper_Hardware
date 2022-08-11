@@ -12,11 +12,11 @@ int port = 8888;
 WiFiServer server(port);
 
 // Set static IP address, gateway IP address, subnet
-IPAddress local_IP(192, 168, 1, 2); //this will be assigned to the ESP
+IPAddress local_IP(192, 168, 1, 4); //this will be assigned to the ESP
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 
-const byte numChars = 32; //size of the message we expect to receive
+const byte numChars = 128; //size of the message we expect to receive
 char receivedCharsTeensy[numChars];
 char receivedCharsPC[numChars]; 
 boolean newDataTeensy = false;
@@ -56,10 +56,11 @@ void loop() {
     
     while(client.connected()){  
 
-        client.print("-------From T41 to PC-------"); ReadMessageFromTeensy();
+        client.print("-------From T41 to PC-------"); 
+        ReadMessageFromTeensy();
         if (newDataTeensy == true) {
-          client.println(receivedCharsTeensy);
-           newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
+          client.println(receivedCharsTeensy); //turned off for debugging
+          newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
         ReadMessageFromPC(client);
@@ -68,7 +69,7 @@ void loop() {
            newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
-        delay(1000);
+        delay(100);
         
     }
     client.stop();
@@ -142,5 +143,3 @@ void ReadMessageFromPC(WiFiClient client) {
         }
     }
 }
-
-
