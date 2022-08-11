@@ -11,6 +11,10 @@ using namespace Archer;
 //==================CONSTANTS
 TripENC tENC(trip_CS1,trip_CS2,trip_CS3);
 ELMO_CANt4 elmo;
+float u1;
+float u2;
+float u3;
+
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
 volatile float dP = 0;
@@ -35,7 +39,7 @@ const byte numChars = 128;
 char receivedChars[numChars]; //change here to get more charactes in the string
 boolean newData = false;
 //this is only for the first debugging run
-char messageFromRobot[128] = "<from archer>"; //fill in the exact length of the message you will be sending
+char messageFromRobot[128]; //fill in the exact length of the message you will be sending
 
 //============FUNCTIONS==========
 void delayLoop(uint32_t T1, uint32_t L){
@@ -239,6 +243,9 @@ void loop() {
   // Add step to get leg length from Bia here over serial
 
   //use for the communication with the wheel motors
+  //convert torques to amps with torque / 0.083 = current [A]
+  //for a range of -1.6Nm to 1.6 Nm
+  //this is done on the PC
   //elmo.cmdTC(u1,IDX_K1);
   //elmo.cmdTC(u2,IDX_K2);
   //elmo.cmdTC(u3,IDX_K3); 
@@ -248,18 +255,17 @@ void loop() {
   //sensor readings should be given to the Serial.print(reading, 4) accuracy
   //use this for sending actual floats to the robot
   //use <...> to denote how message is beginning/ending
-  //use %04d to 4 digits precision
-  //sprintf(messageFromRobot,"<%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d,%04d>", Q0, Q1, Q2, Q3, DY, DP, DR, v1,v2,v3);
-  sprintf(messageFromRobot,"<%d,%d,%d>",v1,v2,v3);
-
-  delayLoop(micros(),1000);  
+  //for some reason order of sending is important
+  sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
+  //delayLoop(micros(),100);  
  
   Serial7.println(messageFromRobot);
+  //Serial.println(messageFromRobot); use for debugging to see input from robot
   Serial.println("-----Torqe commands from PC------ "); 
   ReadMessage(); 
   if (newData == true) {
      Serial.println(receivedChars);
      newData = false;
   }
-   delay(1000);
+  delay(100);
 }
