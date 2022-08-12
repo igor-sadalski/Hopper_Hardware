@@ -18,6 +18,7 @@ ELMO_CANt4 elmo;
 
 float currents[4];
 
+
 #define MAX_CURRENT 1
 #define MIN_CURRENT -1
 
@@ -91,6 +92,9 @@ void setup() {
   delay(5000);
 
   
+  koios->initKoios1(0);
+  koios->resetStates();
+  koios->initKoios2();
   rt = threads.setSliceMicros(50);
   threads.addThread(imuThread);
   koios->setLEDs("0001");
@@ -302,7 +306,6 @@ void loop() {
   if (newData == true) {
      Serial.println(receivedChars);
   
-     
      TokenizeStringToFloats(receivedChars, currents);
      Serial.println(currents[0]);
      Serial.println(currents[1]);

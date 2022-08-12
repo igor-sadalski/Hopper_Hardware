@@ -8,13 +8,13 @@
 #define PORT 8888
 #define SA struct sockaddr
 
-void TokenizeStringToFloats(char str[], float states[]){
+void TokenizeStringToFloats(char str[], float currents[]){
     char * pch;
     pch = strtok (str,",");
     int i = 0;
     while (pch != NULL)
     {
-        states[i] = strtof (pch, NULL);
+        currents[i] = strtof (pch, NULL);
         i++;
         pch = strtok (NULL, ",");
     }
