@@ -56,7 +56,6 @@ void loop() {
     
     while(client.connected()){  
 
-        client.print("-------From T41 to PC-------"); 
         ReadMessageFromTeensy();
         if (newDataTeensy == true) {
           client.println(receivedCharsTeensy); //turned off for debugging
@@ -69,7 +68,7 @@ void loop() {
            newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
-        delay(100);
+        delay(1);
         
     }
     client.stop();

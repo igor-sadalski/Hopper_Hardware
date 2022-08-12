@@ -48,6 +48,10 @@ boolean newData = false;
 //this is only for the first debugging run
 char messageFromRobot[128]; //fill in the exact length of the message you will be sending
 
+//===========SPEEDING UP BABY
+char additional_read_buffer[3000]; //this values are out of nowhere
+char additional_write_buffer[3000];
+
 //=================SETUP=============
 
 void setup() {
@@ -69,39 +73,23 @@ void setup() {
   
   //koios->initKoios2();
   delay(250);
-  Serial.println("init2 ok");
   koios->STO(1);
-  Serial.println("init2 ok");
   koios-> waitSwitch(1); //manual switch on robot
-  Serial.println("init2 ok");
   delay(250);
   rt = koios->motorsOn();
-  Serial.println("init2 ok");
   delay(5000);
   koios->resetStates();
-  Serial.println("init2 ok");
   koios->setLEDs("0100");
-  Serial.println("init2 ok");
   koios->waitSwitch(0);
-  Serial.println("init2 ok");
   koios-> setLogo('A');
-  Serial.println("init2 ok");
   delay(5000);
   koios->flashG(2);
-  Serial.println("init2 ok");
   delay(5000);
-
-  
-  koios->initKoios1(0);
-  koios->resetStates();
-  koios->initKoios2();
   rt = threads.setSliceMicros(50);
   threads.addThread(imuThread);
   koios->setLEDs("0001");
   koios->setLogo('G');
 }
-
-
 
 //============FUNCTIONS==========
 void delayLoop(uint32_t T1, uint32_t L){
@@ -298,18 +286,32 @@ void loop() {
   //for some reason order of sending is important
   sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
   //delayLoop(micros(),100);  
- 
+  Serial7.addMemoryForWrite(additional_write_buffer, sizeof(additional_write_buffer));
   Serial7.println(messageFromRobot);
-  //Serial.println(messageFromRobot); use for debugging to see input from robot
-  //Serial.println("-----Torqe commands from PC------ "); 
-  ReadMessage(); 
+  Serial7.flush(); //wait for any transmitted data still in buffers to atransmit
+  //Increase the amount of buffer memory between reception of bytes by the serial 
+  //hardware and the available() and read() functions.
+  Serial7.addMemoryForRead(additional_read_buffer, sizeof(additional_read_buffer));
+  ReadMessage();
+  Serial7.clear(); //Discard any received data that has not been read.  
   if (newData == true) {
-     Serial.println(receivedChars);
+     //Serial.println(receivedChars);
   
      TokenizeStringToFloats(receivedChars, currents);
+
+         //Safety
+    for (int i = 0; i < 3; i++) {
+      if (currents[i] > MAX_CURRENT) {
+        currents[i] = MAX_CURRENT;
+      } else if (currents[i] < MIN_CURRENT) {
+        currents[i] = MIN_CURRENT;
+      }
+    }
+  
      Serial.println(currents[0]);
      Serial.println(currents[1]);
      Serial.println(currents[2]);
+     Serial.println();
      
      newData = false;
   }
@@ -319,20 +321,11 @@ void loop() {
   //for a range of -1.6Nm to 1.6 Nm
   //this is done on the PC
 
-  //Safety
-  for (int i = 0; i < 3; i++) {
-    if (currents[i] > MAX_CURRENT) {
-      currents[i] = MAX_CURRENT;
-    } else if (currents[i] < MIN_CURRENT) {
-      currents[i] = MIN_CURRENT;
-    }
-  }
-  
   //2
   elmo.cmdTC(currents[0],IDX_K1);
   elmo.cmdTC(currents[1],IDX_K2);
   elmo.cmdTC(currents[2],IDX_K3); 
 
   // send u4 current command to leg over serial RX/TX between teensy boards
-  delay(100);
+  delay(1);
 }
