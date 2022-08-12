@@ -6,14 +6,20 @@
 //#include <SD.h>
 #include <TeensyThreads.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 using namespace Archer;
 
 //==================CONSTANTS
 TripENC tENC(trip_CS1,trip_CS2,trip_CS3);
 ELMO_CANt4 elmo;
-float u1;
-float u2;
-float u3;
+
+float currents[4];
+
+#define MAX_CURRENT 0.1
+#define MIN_CURRENT -0.1
 
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
@@ -40,6 +46,34 @@ char receivedChars[numChars]; //change here to get more charactes in the string
 boolean newData = false;
 //this is only for the first debugging run
 char messageFromRobot[128]; //fill in the exact length of the message you will be sending
+
+//=================SETUP=============
+
+void setup() {
+
+  //====================WIFI==============
+  delay(100); //give time to open and print
+  Serial.begin(115200); //this is for the monitor
+  Serial7.begin(115200); //baud rates must be the same
+  while (!Serial7) {;}
+  delay(100);
+  
+  //start a diode to be sure all is working
+  pinMode(LED_BUILTIN,OUTPUT);
+  digitalWrite(LED_BUILTIN,HIGH);
+
+  //================Koios=============
+  koios = new Koios(tENC, elmo);
+  koios->initKoios1(0);
+  koios->resetStates();
+  koios->initKoios2();
+  rt = threads.setSliceMicros(50);
+  threads.addThread(imuThread);
+  koios->setLEDs("0001");
+  koios->setLogo('G');
+}
+
+
 
 //============FUNCTIONS==========
 void delayLoop(uint32_t T1, uint32_t L){
@@ -191,29 +225,16 @@ void ReadMessage() {
     }
 }
 
-//=================SETUP=============
-
-void setup() {
-
-  //====================WIFI==============
-  delay(100); //give time to open and print
-  Serial.begin(115200); //this is for the monitor
-  Serial7.begin(115200); //baud rates must be the same
-  while (!Serial7) {;}
-  delay(100);
-  
-  //start a diode to be sure all is working
-  pinMode(LED_BUILTIN,OUTPUT);
-  digitalWrite(LED_BUILTIN,HIGH);
-
-  //================Koios=============
-  koios = new Koios(tENC, elmo);
-  koios->initKoios1(0);
-  koios->resetStates();
-  rt = threads.setSliceMicros(50);
-  threads.addThread(imuThread);
-  koios->setLEDs("0001");
-  koios->setLogo('G');
+void TokenizeStringToFloats(char str[], float currents[]){
+    char * pch;
+    pch = strtok (str,",");
+    int i = 0;
+    while (pch != NULL)
+    {
+        currents[i] = strtof (pch, NULL);
+        i++;
+        pch = strtok (NULL, ",");
+    }
 }
 
 //==========================LOOP=============
@@ -242,15 +263,6 @@ void loop() {
   koios->updateStates(x1,v1,x2,v2,x3,v3);
   // Add step to get leg length from Bia here over serial
 
-  //use for the communication with the wheel motors
-  //convert torques to amps with torque / 0.083 = current [A]
-  //for a range of -1.6Nm to 1.6 Nm
-  //this is done on the PC
-  //elmo.cmdTC(u1,IDX_K1);
-  //elmo.cmdTC(u2,IDX_K2);
-  //elmo.cmdTC(u3,IDX_K3); 
-
-  // send u4 current command to leg over serial RX/TX between teensy boards
        
   //sensor readings should be given to the Serial.print(reading, 4) accuracy
   //use this for sending actual floats to the robot
@@ -261,11 +273,39 @@ void loop() {
  
   Serial7.println(messageFromRobot);
   //Serial.println(messageFromRobot); use for debugging to see input from robot
-  Serial.println("-----Torqe commands from PC------ "); 
+  //Serial.println("-----Torqe commands from PC------ "); 
   ReadMessage(); 
   if (newData == true) {
-     Serial.println(receivedChars);
+     //Serial.println(receivedChars);
+  
+     
+     TokenizeStringToFloats(receivedChars, currents);
+     Serial.println(currents[0]);
+     Serial.println(currents[1]);
+     Serial.println(currents[2]);
+     
      newData = false;
   }
+
+   //use for the communication with the wheel motors
+  //convert torques to amps with torque / 0.083 = currents [A]
+  //for a range of -1.6Nm to 1.6 Nm
+  //this is done on the PC
+
+  //Safety
+  for (int i = 0; i < 3; i++) {
+    if (currents[i] > MAX_CURRENT) {
+      currents[i] = MAX_CURRENT;
+    } else if (currents[i] < MIN_CURRENT) {
+      currents[i] = MIN_CURRENT;
+    }
+  }
+  
+  //2
+  elmo.cmdTC(currents[0],IDX_K1);
+  elmo.cmdTC(currents[1],IDX_K2);
+  elmo.cmdTC(currents[2],IDX_K3); 
+
+  // send u4 current command to leg over serial RX/TX between teensy boards
   delay(100);
 }
