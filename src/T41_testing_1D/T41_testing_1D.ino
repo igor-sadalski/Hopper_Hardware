@@ -286,18 +286,19 @@ void loop() {
   //for some reason order of sending is important
   sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
   //delayLoop(micros(),100);  
-  Serial7.addMemoryForWrite(additional_write_buffer, sizeof(additional_write_buffer));
+  //Serial7.addMemoryForWrite(additional_write_buffer, sizeof(additional_write_buffer));
   Serial7.println(messageFromRobot);
-  Serial7.flush(); //wait for any transmitted data still in buffers to atransmit
+  //Serial7.flush(); //wait for any transmitted data still in buffers to atransmit
+  
   //Increase the amount of buffer memory between reception of bytes by the serial 
   //hardware and the available() and read() functions.
-  Serial7.addMemoryForRead(additional_read_buffer, sizeof(additional_read_buffer));
+  //Serial7.addMemoryForRead(additional_read_buffer, sizeof(additional_read_buffer));
   ReadMessage();
   Serial7.clear(); //Discard any received data that has not been read.  
   if (newData == true) {
      //Serial.println(receivedChars);
   
-     TokenizeStringToFloats(receivedChars, currents);
+    TokenizeStringToFloats(receivedChars, currents);
 
          //Safety
     for (int i = 0; i < 3; i++) {

@@ -20,8 +20,8 @@
 using namespace Eigen;
 using namespace Hopper_t;
 
-vector_3t Kp_gains = {1,1,1};
-vector_3t Kd_gains = {.01,.01,.01};
+vector_3t Kp_gains = {10,10,10};
+vector_3t Kd_gains = {1,1,1}; //?
 
 matrix_3t cross(vector_3t q) {
     matrix_3t c;

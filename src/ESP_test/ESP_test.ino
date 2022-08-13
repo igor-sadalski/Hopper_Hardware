@@ -108,7 +108,6 @@ void ReadMessageFromTeensy() {
         }
     }
 }
-
 //ReadMessageFromTeensy differs from ReadMessageFromTeensy 
 //by using different soure of where to read info from
 void ReadMessageFromPC(WiFiClient client) {
