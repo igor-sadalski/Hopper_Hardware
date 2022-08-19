@@ -44,7 +44,7 @@ namespace Archer
       int32_t motorsOff(int val);     // Sends all 3 motorOff commands, then sets STO to 'val'
       int32_t motorsOn();             // Sends all 3 motorOn commands
       void resetStates();             // Sets new values for the "prev" states/times
-      void updateStates(float &x1,float &v1,float &x2,float &v2,float &x3,float &v3);
+      void updateStates(volatile float &x1,volatile float &v1,volatile float &x2,volatile float &v2,volatile float &x3,volatile float &v3);
       int checkFrame(float q0,float q1,float q2,float q3,float dY,float dP,float dR);
       int updateAtt(float &Y,float &P,float &R);
       void delayLoop(uint32_t T0, uint32_t dTdes);
