@@ -90,7 +90,7 @@ namespace Archer
     while (IMU_PORT.available() > 0) {
       IMU_PORT.read();
     }
-    Serial.println("Initialized VN-100 Serial");
+    Serial.println("Initialized VN-100 Serial aka. IMU is working");
     Serial.println(' ');
   }
 
@@ -106,7 +106,7 @@ namespace Archer
       flashR(10); }
     initIMU();
     delay(10);
-    initSD();
+    //initSD();
     delay(10);
   }
 
@@ -114,16 +114,17 @@ namespace Archer
     delay(250);
     STO(1);
     waitSwitch(1);
-    setSigB(1);
+    //setSigB(1); //communication with Bia (leg?)
     delay(250);
     rt = motorsOn();
+    //Serial.print("1.2");
     delay(5000);
-    resetStates();
+    //resetStates();
     setLEDs("0100");
-    waitSwitch(0);
-    setSigB(0);
+    //waitSwitch(0);
+    //setSigB(0);
     setLogo('A');
-    reverseSig(0);
+    //reverseSig(0);
     delay(5000);
     flashG(2);
     delay(5000);
@@ -313,7 +314,7 @@ namespace Archer
     _prevC3 = tcnt;
   }
 
-  void Koios::updateStates(float &x1,float &v1,float &x2,float &v2,float &x3,float &v3){
+  void Koios::updateStates(volatile float &x1,volatile float &v1,volatile float &x2,volatile float &v2,volatile float &x3,volatile float &v3){
     float    pX,dt;
     uint32_t tmp  = micros();
     long     tcnt = tENC_.readEncoder(1);

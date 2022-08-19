@@ -58,7 +58,7 @@ void setup() {
 
   //====================WIFI==============
   delay(100); //give time to open and print
-  Serial.begin(115200); //this is for the monitor
+  //Serial.begin(115200); //this is for the monitor
   Serial7.begin(115200); //baud rates must be the same
   while (!Serial7) {;}
   delay(100);
@@ -309,10 +309,10 @@ void loop() {
       }
     }
   
-     Serial.println(currents[0]);
-     Serial.println(currents[1]);
-     Serial.println(currents[2]);
-     Serial.println();
+     //Serial.println(currents[0]);
+     //Serial.println(currents[1]);
+     //Serial.println(currents[2]);
+     //Serial.println();
      
      newData = false;
   }
