@@ -15,14 +15,15 @@
 #include <Eigen/Core>
 
 #define MAX 128
+#define STATE_SIZE 40
 #define PORT 8888
 #define SA struct sockaddr
 
 using namespace Eigen;
 using namespace Hopper_t;
 
-vector_3t Kp_gains = {10,10,10};
-vector_3t Kd_gains = {1,1,1}; //?
+vector_3t Kp_gains = {1,1,1};
+vector_3t Kd_gains = {0,0,0}; //?
 
 matrix_3t cross(vector_3t q) {
     matrix_3t c;
@@ -32,16 +33,18 @@ matrix_3t cross(vector_3t q) {
     return c;
 }
 
-void TokenizeStringToFloats(char str[], float currents[]){
-    char * pch;
-    pch = strtok (str,",");
-    int i = 0;
-    while (pch != NULL)
-    {
-        currents[i] = strtof (pch, NULL);
-        i++;
-        pch = strtok (NULL, ",");
-    }
+void TokenizeStringToFloats(char str[], float state[]){
+    //char * pch;
+    //pch = strtok (str,",");
+    //int i = 0;
+    //while (pch != NULL)
+    //{
+    //    state[i] = strtof (pch, NULL);
+    //    i++;
+    //    pch = strtok (NULL, ",");
+    //}
+    //
+    memcpy(state, str, sizeof(str));
 }
 
 void computeTorque(quat_t quat_a, quat_t quat_d, vector_3t omega_a, vector_3t omega_d, vector_3t &torque) {
@@ -83,7 +86,7 @@ int main()
 	vector_3t torque;
 	scalar_t Q_w, Q_x, Q_y, Q_z;
 	scalar_t w_x, w_y, w_z;
-	char buff[MAX];
+	char buff[40];
 	char send_buff[MAX] = "<{0,0,0}>";
 	//torques to currents, assumes torques is an array of floats
 	scalar_t const_wheels = 0.083;
@@ -131,6 +134,8 @@ int main()
   
 
 	write(sockfd, "ok", 3);        
+        std::chrono::steady_clock::time_point begin;
+        std::chrono::steady_clock::time_point end;
 	while(1){
 		t1 = std::chrono::high_resolution_clock::now();
 		bzero(buff, sizeof(buff));
@@ -138,6 +143,15 @@ int main()
 		//receive string states, ESP8266 -> PC
 		read(sockfd, buff, sizeof(buff));
 		//printf("%s \n", buff);	
+		float tmp;
+		memcpy(&tmp, buff, sizeof(float));
+		//std::cout << tmp << std::endl;
+		std::cout << "Message: ";
+		for (int i = 0; i < sizeof(buff); i++) {
+			std::cout << std::to_string(buff[i]) << " ";
+		}
+		std::cout << std::endl;
+		read(sockfd, buff, 6); // Weird thing to clear the buffer
 		
 		//assume tokenization on ,
 		TokenizeStringToFloats(buff, states);
@@ -146,9 +160,10 @@ int main()
 		  quat_init = Quaternion<scalar_t>(states[6], states[7], states[8], states[9]);
 		  init = true;
 		}
+		state_vec.setZero();
 		state_vec << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9];
 		
-		std::cout << "state: " << state_vec.transpose() << std::endl;
+		//std::cout << "state: " << state_vec.transpose() << std::endl;
 		w_x = states[3];
 		w_y = states[4];
 		w_z = states[5];				

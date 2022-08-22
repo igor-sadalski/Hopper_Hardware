@@ -16,11 +16,13 @@ IPAddress local_IP(192, 168, 1, 4); //this will be assigned to the ESP
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 
-const byte numChars = 128; //size of the message we expect to receive
+const byte numChars = 40; //size of the message we expect to receive
 char receivedCharsTeensy[numChars];
 char receivedCharsPC[numChars]; 
 boolean newDataTeensy = false;
 boolean newDataPC = false;
+
+String readValue;
 
 void setup() {
   
@@ -49,6 +51,8 @@ void setup() {
 }
 
 void loop() {
+
+  float state[10] = {1,1,1,1,1,1,1,1,1,1};
   
   WiFiClient client = server.available();
   
@@ -69,6 +73,17 @@ void loop() {
            newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
+//      if(Serial.available()) {
+//        Serial.readBytes(receivedCharsTeensy, sizeof(receivedCharsTeensy));
+//      }
+//      memcpy(receivedCharsTeensy, state, sizeof(state));
+//      for (int i = 0; i < 40; i++) {
+//        receivedCharsTeensy[i] = 1;
+//      }
+//      client.print(receivedCharsTeensy); //turned off for debugging
+//      client.flush();
+ //     delay(1);
+      
 //        delay(1);
         
     }
@@ -96,8 +111,8 @@ void ReadMessageFromTeensy() {
                     ndx = numChars - 1;
                 }
             }
-            else {
-                receivedCharsTeensy[ndx] = '\0'; // terminate the string
+            if (ndx == numChars)  {
+//                receivedCharsTeensy[ndx] = '\0'; // terminate the string
                 recvInProgress = false;
                 ndx = 0;
                 newDataTeensy = true;

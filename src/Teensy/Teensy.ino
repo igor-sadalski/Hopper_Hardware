@@ -19,8 +19,8 @@ ELMO_CANt4 elmo;
 float currents[4];
 
 
-#define MAX_CURRENT 1
-#define MIN_CURRENT -1
+#define MAX_CURRENT 15
+#define MIN_CURRENT -15
 
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
@@ -47,6 +47,8 @@ char receivedChars[numChars]; //change here to get more charactes in the string
 boolean newData = false;
 //this is only for the first debugging run
 char messageFromRobot[128]; //fill in the exact length of the message you will be sending
+char exactMessage[40]; //fill in the exact length of the message you will be sending
+float state[10];
 
 //===========SPEEDING UP BABY
 char additional_read_buffer[3000]; //this values are out of nowhere
@@ -58,7 +60,7 @@ void setup() {
 
   //====================WIFI==============
   delay(100); //give time to open and print
-  //Serial.begin(115200); //this is for the monitor
+  Serial.begin(115200); //this is for the monitor
   Serial7.begin(115200); //baud rates must be the same
   while (!Serial7) {;}
   delay(100);
@@ -89,6 +91,8 @@ void setup() {
 //  threads.addThread(imuThread);
 //  koios->setLEDs("0001");
 //  koios->setLogo('G');
+
+  Serial7.clear();
 }
 
 //============FUNCTIONS==========
@@ -284,10 +288,45 @@ void loop() {
   //use this for sending actual floats to the robot
   //use <...> to denote how message is beginning/ending
   //for some reason order of sending is important
-  sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
+  
+  // String communication
+  //sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
+  //Serial7.println(messageFromRobot);
+
+  // float communication
+  state[0] = v1;
+  state[1] = v2;
+  state[2] = v3;
+  state[3] = DY;
+  state[4] = DP;
+  state[5] = DR;
+  state[6] = Q0;
+  state[7] = Q1;
+  state[8] = Q2;
+  state[9] = Q3;
+
+  state[0] = 1; // debug
+  state[1] = 1; // debug
+  state[2] = 1; // debug
+  state[3] = 1; // debug
+  state[4] = 1; // debug
+  state[5] = 1; // debug
+  state[6] = 1; // debug
+  state[7] = 1; // debug
+  state[8] = 1; // debug
+  state[9] = 1; // debug
+  
+  memcpy(&exactMessage[0], state, 10*sizeof(float));
+//  exactMessage[0] = '<';
+//  exactMessage[41] = '>';
+  Serial7.println(exactMessage);
+  Serial7.flush();
+//  sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
+//  Serial.println(messageFromRobot);
+  
   //delayLoop(micros(),100);  
   //Serial7.addMemoryForWrite(additional_write_buffer, sizeof(additional_write_buffer));
-  Serial7.println(messageFromRobot);
+  
   //Serial7.flush(); //wait for any transmitted data still in buffers to atransmit
   
   //Increase the amount of buffer memory between reception of bytes by the serial 
@@ -309,10 +348,10 @@ void loop() {
       }
     }
   
-     //Serial.println(currents[0]);
-     //Serial.println(currents[1]);
-     //Serial.println(currents[2]);
-     //Serial.println();
+     Serial.println(currents[0]);
+     Serial.println(currents[1]);
+     Serial.println(currents[2]);
+     Serial.println();
      
      newData = false;
   }
