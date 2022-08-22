@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <chrono>
 
 #include "../inc/Types.h"
 
@@ -123,13 +124,20 @@ int main()
 	//cannot use spaces or special characters in the string message as the program otherwise freaks out
 	
 	   
+        std::chrono::high_resolution_clock::time_point t1;
+
+        std::chrono::high_resolution_clock::time_point t2;
+
+  
+
 	write(sockfd, "ok", 3);        
 	while(1){
+		t1 = std::chrono::high_resolution_clock::now();
 		bzero(buff, sizeof(buff));
 		
 		//receive string states, ESP8266 -> PC
 		read(sockfd, buff, sizeof(buff));
-		printf("%s \n", buff);	
+		//printf("%s \n", buff);	
 		
 		//assume tokenization on ,
 		TokenizeStringToFloats(buff, states);
@@ -156,9 +164,11 @@ int main()
 		computeTorque(quat_a, quat_d, omega_a, omega_d, torque);
 		bzero(send_buff, sizeof(send_buff));
 		sprintf(send_buff,"<{%f,%f,%f}>",torque(0)/const_wheels, torque(1)/const_wheels, torque(2))/const_wheels;	
-		std::cout << "torque: " << torque.transpose()/const_wheels << std::endl;
+		//std::cout << "torque: " << torque.transpose()/const_wheels << std::endl;
 		
 		write(sockfd, send_buff, sizeof(send_buff));		
+		t2 = std::chrono::high_resolution_clock::now();
+                std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
 	}
 
 	close(sockfd);

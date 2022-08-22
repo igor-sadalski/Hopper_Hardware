@@ -59,6 +59,7 @@ void loop() {
         ReadMessageFromTeensy();
         if (newDataTeensy == true) {
           client.println(receivedCharsTeensy); //turned off for debugging
+          client.flush();
           newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
@@ -68,7 +69,7 @@ void loop() {
            newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
         }
         
-        delay(1);
+//        delay(1);
         
     }
     client.stop();

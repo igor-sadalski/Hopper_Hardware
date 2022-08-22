@@ -71,24 +71,24 @@ void setup() {
   koios = new Koios(tENC, elmo);
   koios->initKoios1(1);
   
-  //koios->initKoios2();
-  delay(250);
-  koios->STO(1);
-  koios-> waitSwitch(1); //manual switch on robot
-  delay(250);
-  rt = koios->motorsOn();
-  delay(5000);
-  koios->resetStates();
-  koios->setLEDs("0100");
-  koios->waitSwitch(0);
-  koios-> setLogo('A');
-  delay(5000);
-  koios->flashG(2);
-  delay(5000);
-  rt = threads.setSliceMicros(50);
-  threads.addThread(imuThread);
-  koios->setLEDs("0001");
-  koios->setLogo('G');
+//  //koios->initKoios2();
+//  delay(250);
+//  koios->STO(1);
+//  koios-> waitSwitch(1); //manual switch on robot
+//  delay(250);
+//  rt = koios->motorsOn();
+//  delay(5000);
+//  koios->resetStates();
+//  koios->setLEDs("0100");
+//  koios->waitSwitch(0);
+//  koios-> setLogo('A');
+//  delay(5000);
+//  koios->flashG(2);
+//  delay(5000);
+//  rt = threads.setSliceMicros(50);
+//  threads.addThread(imuThread);
+//  koios->setLEDs("0001");
+//  koios->setLogo('G');
 }
 
 //============FUNCTIONS==========
