@@ -7,12 +7,20 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <chrono>
+#include <bitset>
 
 #include "../inc/Types.h"
 
 #include <Eigen/Eigen>
 #include <Eigen/Dense>
 #include <Eigen/Core>
+
+#include "ros/ros.h"
+#include "geometry_msgs/PoseStamped.h"
+#include "geometry_msgs/TwistStamped.h"
+#include "geometry_msgs/AccelStamped.h"
+#include "geometry_msgs/TransformStamped.h"
+#include "std_msgs/String.h"
 
 #define MAX 128
 #define STATE_SIZE 40
@@ -24,6 +32,16 @@ using namespace Hopper_t;
 
 vector_3t Kp_gains = {1,1,1};
 vector_3t Kd_gains = {0,0,0}; //?
+
+struct State {
+  scalar_t x;
+  scalar_t y;
+  scalar_t z;
+  scalar_t q_w;
+  scalar_t q_x;
+  scalar_t q_y;
+  scalar_t q_z;
+} state;
 
 matrix_3t cross(vector_3t q) {
     matrix_3t c;
@@ -43,7 +61,7 @@ void TokenizeStringToFloats(char str[], float state[]){
     //    i++;
     //    pch = strtok (NULL, ",");
     //}
-    //
+   //
     memcpy(state, str, sizeof(str));
 }
 
@@ -77,7 +95,18 @@ void computeTorque(quat_t quat_a, quat_t quat_d, vector_3t omega_a, vector_3t om
     torque << tau;
 };
 
-int main()
+void chatterCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
+{
+  state.x = msg->pose.position.x;
+  state.y = msg->pose.position.y;
+  state.z = msg->pose.position.z;
+  state.q_w = msg->pose.orientation.w;
+  state.q_x = msg->pose.orientation.x;
+  state.q_y = msg->pose.orientation.y;
+  state.q_z = msg->pose.orientation.z;
+}
+
+int main(int argc, char **argv)
 {
 	quat_t quat_d;
 	quat_t quat_a;
@@ -86,7 +115,7 @@ int main()
 	vector_3t torque;
 	scalar_t Q_w, Q_x, Q_y, Q_z;
 	scalar_t w_x, w_y, w_z;
-	char buff[40];
+	char buff[46];
 	char send_buff[MAX] = "<{0,0,0}>";
 	//torques to currents, assumes torques is an array of floats
 	scalar_t const_wheels = 0.083;
@@ -124,7 +153,7 @@ int main()
 		printf("connected to the server..\n");
 
 
-	//cannot use spaces or special characters in the string message as the program otherwise freaks out
+	////cannot use spaces or special characters in the string message as the program otherwise freaks out
 	
 	   
         std::chrono::high_resolution_clock::time_point t1;
@@ -133,25 +162,51 @@ int main()
 
   
 
-	write(sockfd, "ok", 3);        
+	//write(sockfd, "ok", 3);        
         std::chrono::steady_clock::time_point begin;
         std::chrono::steady_clock::time_point end;
+
+
+	//ros::init(argc, argv, "listener");
+	//ros::NodeHandle n;
+	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
+	//ros::spin();
 	while(1){
+		//ros::spinOnce();
 		t1 = std::chrono::high_resolution_clock::now();
 		bzero(buff, sizeof(buff));
 		
 		//receive string states, ESP8266 -> PC
 		read(sockfd, buff, sizeof(buff));
 		//printf("%s \n", buff);	
-		float tmp;
-		memcpy(&tmp, buff, sizeof(float));
-		//std::cout << tmp << std::endl;
+		char oneAdded[6];
+		memcpy(oneAdded, buff+40, 6*sizeof(char));
+		//std::cout << "One added: " << std::endl;
+		//for (int i = 0; i < 6; i++) {
+		//	std::bitset<8> x(oneAdded[i]);
+		//	std::cout << x << " ";
+		//}
+		//std::cout << std::endl;
+		for (int i = 0; i < 6; i++) {
+	          for (int j = 1; j < 8; j++) {
+	            if(oneAdded[i] & (1 << (8-j))) {
+ 	              buff[i*7+(j-1)] = 0;
+	            }
+	          }
+		}
+
+		float tmp[10];
+		memcpy(&tmp, buff, 10*sizeof(float));
 		std::cout << "Message: ";
-		for (int i = 0; i < sizeof(buff); i++) {
-			std::cout << std::to_string(buff[i]) << " ";
+		for (int i = 0; i < 10; i++) {
+     	          std::cout << tmp[i] << ", ";
 		}
 		std::cout << std::endl;
-		read(sockfd, buff, 6); // Weird thing to clear the buffer
+		std::cout <<"Global state: " << state.x << ", " << state.y << ", " << state.z <<std::endl;
+		//read(sockfd, buff, 6); // Weird thing to clear the buffer
+
+
+		// ROS stuff
 		
 		//assume tokenization on ,
 		TokenizeStringToFloats(buff, states);
@@ -181,7 +236,7 @@ int main()
 		sprintf(send_buff,"<{%f,%f,%f}>",torque(0)/const_wheels, torque(1)/const_wheels, torque(2))/const_wheels;	
 		//std::cout << "torque: " << torque.transpose()/const_wheels << std::endl;
 		
-		write(sockfd, send_buff, sizeof(send_buff));		
+		//write(sockfd, send_buff, sizeof(send_buff));		
 		t2 = std::chrono::high_resolution_clock::now();
                 std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
 	}
@@ -189,4 +244,3 @@ int main()
 	close(sockfd);
 }
 
-//gcc PC_testing_1D.c -o pc_testing

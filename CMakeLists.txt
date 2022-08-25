@@ -9,6 +9,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "-O3")
 
 find_package(Eigen3 REQUIRED)
+find_package(roscpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 add_executable(hopper src/PC_testing_1D.cpp)
 target_link_libraries(hopper Eigen3::Eigen)
+target_include_directories(hopper PUBLIC ${roscpp_INCLUDE_DIRS})
+target_link_libraries(hopper ${roscpp_LIBRARIES})

@@ -260,6 +260,7 @@ void TokenizeStringToFloats(char str[], float currents[]){
 //==========================LOOP=============
 
 void loop() {
+  char receivedCharsTeensy[10*sizeof(float)+6];
   static float Q0 = 0;
   static float Q1 = 0;
   static float Q2 = 0;
@@ -293,36 +294,58 @@ void loop() {
   //sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
   //Serial7.println(messageFromRobot);
 
-  // float communication
-  state[0] = v1;
-  state[1] = v2;
-  state[2] = v3;
-  state[3] = DY;
-  state[4] = DP;
-  state[5] = DR;
-  state[6] = Q0;
-  state[7] = Q1;
-  state[8] = Q2;
-  state[9] = Q3;
-
-  state[0] = 1; // debug
-  state[1] = 1; // debug
-  state[2] = 1; // debug
-  state[3] = 1; // debug
-  state[4] = 1; // debug
-  state[5] = 1; // debug
-  state[6] = 1; // debug
-  state[7] = 1; // debug
-  state[8] = 1; // debug
-  state[9] = 1; // debug
-  
-  memcpy(&exactMessage[0], state, 10*sizeof(float));
 //  exactMessage[0] = '<';
 //  exactMessage[41] = '>';
-  Serial7.println(exactMessage);
-  Serial7.flush();
+//  Serial7.println(exactMessage);
+//  Serial7.flush();
 //  sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
 //  Serial.println(messageFromRobot);
+//    state[0] = v1;
+//    state[1] = v2;
+//    state[2] = v3;
+//    state[3] = DY;
+//    state[4] = DP;
+//    state[5] = DR;
+//    state[6] = Q0;
+//    state[7] = Q1;
+//    state[8] = Q2;
+//    state[9] = Q3;
+
+    state[0] = 1;
+    state[1] = 1;
+    state[2] = 1;
+    state[3] = 1;
+    state[4] = 1;
+    state[5] = 1;
+    state[6] = 1;
+    state[7] = 1;
+    state[8] = 1;
+    state[9] = 1;
+
+    memcpy(receivedCharsTeensy, state, 40);
+     
+     for (int i = 0; i < 6; i++) {
+         byte oneAdded = 0b00000001;
+         for (int j = 1; j < 8; j++){
+           if (receivedCharsTeensy[i*7+(j-1)] == 0b00000000) {
+             receivedCharsTeensy[i*7+(j-1)] = 0b00000001;
+             oneAdded += (1 << (8-j));
+           }
+         }
+         memcpy(&receivedCharsTeensy[40+i], &oneAdded, 1);
+     }
+     
+     
+     Serial7.print(receivedCharsTeensy);
+     Serial7.flush();
+     for (int i = 0; i < 46; i++) {
+      Serial.print(receivedCharsTeensy[i], BIN);
+      Serial.print(" ");
+     }
+     Serial.println();
+     
+//     delay(1000);
+
   
   //delayLoop(micros(),100);  
   //Serial7.addMemoryForWrite(additional_write_buffer, sizeof(additional_write_buffer));
@@ -332,29 +355,32 @@ void loop() {
   //Increase the amount of buffer memory between reception of bytes by the serial 
   //hardware and the available() and read() functions.
   //Serial7.addMemoryForRead(additional_read_buffer, sizeof(additional_read_buffer));
-  ReadMessage();
-  Serial7.clear(); //Discard any received data that has not been read.  
-  if (newData == true) {
-     //Serial.println(receivedChars);
-  
-    TokenizeStringToFloats(receivedChars, currents);
+//  ReadMessage();
+//  Serial7.clear(); //Discard any received data that has not been read.  
 
-         //Safety
-    for (int i = 0; i < 3; i++) {
-      if (currents[i] > MAX_CURRENT) {
-        currents[i] = MAX_CURRENT;
-      } else if (currents[i] < MIN_CURRENT) {
-        currents[i] = MIN_CURRENT;
-      }
-    }
-  
-     Serial.println(currents[0]);
-     Serial.println(currents[1]);
-     Serial.println(currents[2]);
-     Serial.println();
-     
-     newData = false;
-  }
+
+
+//  if (newData == true) {
+//     //Serial.println(receivedChars);
+//  
+//    TokenizeStringToFloats(receivedChars, currents);
+//
+//         //Safety
+//    for (int i = 0; i < 3; i++) {
+//      if (currents[i] > MAX_CURRENT) {
+//        currents[i] = MAX_CURRENT;
+//      } else if (currents[i] < MIN_CURRENT) {
+//        currents[i] = MIN_CURRENT;
+//      }
+//    }
+//  
+//     Serial.println(currents[0]);
+//     Serial.println(currents[1]);
+//     Serial.println(currents[2]);
+//     Serial.println();
+//     
+//     newData = false;
+//  }
 
    //use for the communication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
@@ -362,10 +388,10 @@ void loop() {
   //this is done on the PC
 
   //2
-  elmo.cmdTC(currents[0],IDX_K1);
-  elmo.cmdTC(currents[1],IDX_K2);
-  elmo.cmdTC(currents[2],IDX_K3); 
+//  elmo.cmdTC(currents[0],IDX_K1);
+//  elmo.cmdTC(currents[1],IDX_K2);
+//  elmo.cmdTC(currents[2],IDX_K3); 
 
   // send u4 current command to leg over serial RX/TX between teensy boards
-  delay(1);
+//  delay(1);
 }
