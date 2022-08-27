@@ -2,17 +2,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <chrono>
+#include <cstdlib>
+#include <signal.h>
 
 #include "../inc/Types.h"
 
 #include <Eigen/Eigen>
 #include <Eigen/Dense>
 #include <Eigen/Core>
+
+#include "ros/ros.h"
+#include "geometry_msgs/PoseStamped.h"
+#include "geometry_msgs/TwistStamped.h"
+#include "geometry_msgs/AccelStamped.h"
+#include "geometry_msgs/TransformStamped.h"
+#include "std_msgs/String.h"
 
 #define MAX 128
 #define PORT 8888
@@ -31,6 +41,16 @@ matrix_3t cross(vector_3t q) {
             -q(1), q(0), 0;
     return c;
 }
+
+struct State {
+  scalar_t x;
+  scalar_t y;
+  scalar_t z;
+  scalar_t q_w;
+  scalar_t q_x;
+  scalar_t q_y;
+  scalar_t q_z;
+} state;
 
 void TokenizeStringToFloats(char str[], float currents[]){
     char * pch;
@@ -74,8 +94,32 @@ void computeTorque(quat_t quat_a, quat_t quat_d, vector_3t omega_a, vector_3t om
     torque << tau;
 };
 
-int main()
+void chatterCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
+  state.x = msg->pose.position.x;
+  state.y = msg->pose.position.y;
+  state.z = msg->pose.position.z;
+  state.q_w = msg->pose.orientation.w;
+  state.q_x = msg->pose.orientation.x;
+  state.q_y = msg->pose.orientation.y;
+  state.q_z = msg->pose.orientation.z;
+}
+void signal_callback_handler(int signum) {
+	std::cout << "Caught signal " << signum << std::endl;
+   // Terminate program
+   exit(signum);
+}
+
+int main(int argc, char **argv)
+{
+
+	bool fileWrite = true;
+        std::string dataLog = "../data/data.csv";
+	std::ofstream fileHandle;
+        fileHandle.open(dataLog);
+	fileHandle << "t,x,y,z,q_w,q_x,q_y,q_z" << std::endl;
+
+
 	quat_t quat_d;
 	quat_t quat_a;
 	vector_3t omega_a;
@@ -125,13 +169,19 @@ int main()
 	
 	   
         std::chrono::high_resolution_clock::time_point t1;
-
+        std::chrono::high_resolution_clock::time_point t_start;
         std::chrono::high_resolution_clock::time_point t2;
 
-  
+	t_start = std::chrono::high_resolution_clock::now();
+	//ros::init(argc, argv, "listener");
+	//ros::NodeHandle n;
+	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
 
 	write(sockfd, "ok", 3);        
+
+	signal(SIGINT, signal_callback_handler);
 	while(1){
+		//ros::spinOnce();
 		t1 = std::chrono::high_resolution_clock::now();
 		bzero(buff, sizeof(buff));
 		
@@ -147,6 +197,8 @@ int main()
 		  init = true;
 		}
 		state_vec << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9];
+
+		std::cout <<"Global state: " << state.x << ", " << state.y << ", " << state.z <<std::endl;
 		
 		std::cout << "state: " << state_vec.transpose() << std::endl;
 		w_x = states[3];
@@ -169,9 +221,13 @@ int main()
 		write(sockfd, send_buff, sizeof(send_buff));		
 		t2 = std::chrono::high_resolution_clock::now();
                 std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
+
+		if (fileWrite) {
+		  fileHandle << std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t_start).count()*1e-9 << "," << state.x << ", " << state.y << ", " << state.z<<","<< state.q_w << ","<<state.q_x<<","<<state.q_y<<","<<state.q_z<<std::endl; 
+		}
 	}
 
 	close(sockfd);
 }
 
-//gcc PC_testing_1D.c -o pc_testing
+//roslaunch vrpn_client_ros fast.launch server:=192.168.1.5

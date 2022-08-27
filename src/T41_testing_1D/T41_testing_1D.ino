@@ -328,5 +328,5 @@ void loop() {
   elmo.cmdTC(currents[2],IDX_K3); 
 
   // send u4 current command to leg over serial RX/TX between teensy boards
-  delay(1);
+//  delay(1);
 }
