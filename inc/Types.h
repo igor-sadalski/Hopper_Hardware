@@ -43,7 +43,7 @@ using size_array_t = std::vector<size_t>;
 using size_array2_t = std::vector<size_array_t>;
 
 /** Scalar type. */
-using scalar_t = double;
+using scalar_t = float;
 /** Scalar trajectory type. */
 using scalar_array_t = std::vector<scalar_t>;
 /** Array of scalar trajectory type. */

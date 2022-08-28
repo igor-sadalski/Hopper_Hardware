@@ -16,7 +16,7 @@ using namespace Archer;
 TripENC tENC(trip_CS1,trip_CS2,trip_CS3);
 ELMO_CANt4 elmo;
 
-float currents[4];
+float x_d[7];
 
 
 #define MAX_CURRENT 15
@@ -91,7 +91,7 @@ void setup() {
 //  threads.addThread(imuThread);
 //  koios->setLEDs("0001");
 //  koios->setLogo('G');
-
+//  delay(2000);
   Serial7.clear();
 }
 
@@ -260,7 +260,7 @@ void TokenizeStringToFloats(char str[], float currents[]){
 //==========================LOOP=============
 
 void loop() {
-  char receivedCharsTeensy[10*sizeof(float)+6];
+  char receivedCharsTeensy[10*sizeof(float)+8];
   static float Q0 = 0;
   static float Q1 = 0;
   static float Q2 = 0;
@@ -311,38 +311,43 @@ void loop() {
 //    state[8] = Q2;
 //    state[9] = Q3;
 
-    state[0] = 1;
-    state[1] = 1;
-    state[2] = 1;
-    state[3] = 1;
-    state[4] = 1;
-    state[5] = 1;
-    state[6] = 1;
-    state[7] = 1;
-    state[8] = 1;
-    state[9] = 1;
+    state[0] = 0b00000001;
+    state[1] = 0b00000001;
+    state[2] = 0b00000001;
+    state[3] = 0b00000001;
+    state[4] = 0b00000001;
+    state[5] = 0b00000001;
+    state[6] = 0b00000001;
+    state[7] = 0b00000001;
+    state[8] = 0b00000001;
+    state[9] = 0b00000001;
 
-    memcpy(receivedCharsTeensy, state, 40);
+    receivedCharsTeensy[0] = 0b11111111;
+    receivedCharsTeensy[1] = 0b11111111;
+    memcpy(receivedCharsTeensy+2, state, 40);
      
      for (int i = 0; i < 6; i++) {
          byte oneAdded = 0b00000001;
          for (int j = 1; j < 8; j++){
-           if (receivedCharsTeensy[i*7+(j-1)] == 0b00000000) {
-             receivedCharsTeensy[i*7+(j-1)] = 0b00000001;
+           if (receivedCharsTeensy[i*7+(j-1)+2] == 0b00000000) {
+             receivedCharsTeensy[i*7+(j-1)+2] = 0b00000001;
              oneAdded += (1 << (8-j));
            }
          }
-         memcpy(&receivedCharsTeensy[40+i], &oneAdded, 1);
+         memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
      }
+
+//     Serial7.print(receivedCharsTeensy);
+//     Serial7.flush();
+
+
      
-     
-     Serial7.print(receivedCharsTeensy);
-     Serial7.flush();
-     for (int i = 0; i < 46; i++) {
-      Serial.print(receivedCharsTeensy[i], BIN);
-      Serial.print(" ");
-     }
-     Serial.println();
+//     for (int i = 0; i < 48; i++) {
+//      Serial.print(receivedCharsTeensy[i], BIN);
+//      Serial.print(" ");
+//     }
+//     Serial.println();
+//     delay(100);
      
 //     delay(1000);
 
@@ -356,16 +361,29 @@ void loop() {
   //hardware and the available() and read() functions.
   //Serial7.addMemoryForRead(additional_read_buffer, sizeof(additional_read_buffer));
 //  ReadMessage();
-//  Serial7.clear(); //Discard any received data that has not been read.  
+  int index = 0;
+  char receivedCharsESP[34];
+  while(index < 34) {
+    if (Serial7.available() > 0) {
+      receivedCharsESP[index] = Serial7.read();
+      index++;
+    }
+  }
+  Serial7.clear(); //Discard any received data that has not been read.  
+  for (int i = 0; i < 34; i++) {
+    Serial.print(receivedCharsESP[i], BIN);
+    Serial.print(" ");
+  }
+  Serial.println();
 
 
 
-//  if (newData == true) {
-//     //Serial.println(receivedChars);
+  if (newData == true) {
+//     Serial.println(receivedChars);
 //  
-//    TokenizeStringToFloats(receivedChars, currents);
-//
-//         //Safety
+    TokenizeStringToFloats(receivedChars, x_d);
+
+         //Safety
 //    for (int i = 0; i < 3; i++) {
 //      if (currents[i] > MAX_CURRENT) {
 //        currents[i] = MAX_CURRENT;
@@ -373,14 +391,18 @@ void loop() {
 //        currents[i] = MIN_CURRENT;
 //      }
 //    }
-//  
-//     Serial.println(currents[0]);
-//     Serial.println(currents[1]);
-//     Serial.println(currents[2]);
-//     Serial.println();
-//     
-//     newData = false;
-//  }
+  
+     Serial.println(x_d[0]);
+     Serial.println(x_d[1]);
+     Serial.println(x_d[2]);
+     Serial.println(x_d[3]);
+     Serial.println(x_d[4]);
+     Serial.println(x_d[5]);
+     Serial.println(x_d[6]);
+     Serial.println();
+     
+     newData = false;
+  }
 
    //use for the communication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]

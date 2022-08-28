@@ -17,7 +17,6 @@ IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 
 const byte numChars = 40; //size of the message we expect to receive
-char receivedCharsPC[numChars]; 
 boolean newDataTeensy = false;
 boolean newDataPC = false;
 
@@ -60,27 +59,59 @@ union convert {
 void loop() {
 
   float state[10] = {1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342};
-  char receivedCharsTeensy[10*sizeof(float)+6];
+  char sendChars[10*sizeof(float)+8];
+  char receivedCharsTeensy[10*sizeof(float)+8+6];
+  char receivedCharsPC[40]; 
+  char sendCharsTeensy[34];
   float tmp2[3] = {1.435, 1.123, 5.025};
   
   WiFiClient client = server.available();
   
   if (client) {
-    for (int i = 0; i < 46; i++) {
+    for (int i = 0; i < 48+6; i++) {
+      receivedCharsTeensy[i] = 0b10;
+    }
+    for (int i = 0; i < 2; i++) {
+      receivedCharsTeensy[i] = 0b11111111;
+    }
+    for (int i = 42; i < 50; i++) {
       receivedCharsTeensy[i] = 0b1;
     }
-    
+    client.flush();
+    delay(500);
     while(client.connected()){  
 
       int index = 0;
-      while(index < 46) {
-        if (Serial.available() > 0) {
-          receivedCharsTeensy[index] = Serial.read();
-          index++;
-        }
-      }
-      client.print(receivedCharsTeensy); //turned off for debugging
+//      while(index < 48+6) {
+//        if (Serial.available() > 0) {
+//          receivedCharsTeensy[index] = Serial.read();
+//          index++;
+//        }
+//      }
+      memcpy(sendChars, receivedCharsTeensy, sizeof(sendChars));
+      client.print(sendChars); //turned off for debugging
       client.flush();
+
+//      index = 0;
+//      if (client.available() > 0) {
+        while(index < 34) {
+          if (client.available() > 0) {
+            receivedCharsPC[index] = client.read();
+            index++;
+          }
+        }
+//      }
+//
+      memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
+////      Serial.print(sendCharsTeensy); //turned off for debugging
+////      Serial.flush();
+
+      for (int i = 0; i < 34; i++) {
+        Serial.print(sendCharsTeensy[i], BIN);
+        Serial.print(" ");
+      }
+      Serial.println();
+      
 
 //        ReadMessageFromTeensy();
 //        if (newDataTeensy == true) {
@@ -93,36 +124,10 @@ void loop() {
 //        if (newDataPC == true) {
 //           Serial.println(receivedCharsPC);
 //           newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
-//        }
-//        
-      //if(Serial.available()) {
-      //  Serial.readBytes(receivedCharsTeensy, sizeof(receivedCharsTeensy));
-      //}
-//      char tmp = 2;
-//      for (int i = 0; i < 40; i++) {
-//        memcpy(&receivedCharsTeensy[i] , &tmp, sizeof(char));
-//      }
-      
-//      char f_byte[4] = {1,1,1,1};
-//      memcpy(f_byte,  (unsigned char*)(&tmp2), sizeof(float));
-//      memcpy(receivedCharsTeensy, state, 40);
-
-//      convert val;
-//      val.x[0] = 0;
-//      val.x[1] = 0.5;
-//      val.x[2] = 1;
-//      val.x[3] = 1.2345;
-//      val.x[4] = 4.5;
-//      val.x[5] = 7;
-//      val.x[6] = 8.4;
-//      val.x[7] = 12;
-//      val.x[8] = 101.1;
-//      val.x[9] = 1.1234123;
-//
-//     
-        
+//        }   
     }
     client.stop();
+    exit(0);
   }
 }  
 //
