@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -125,6 +126,13 @@ int main(int argc, char **argv)
 	vector_t state_init(10);
 	quat_t quat_init;
 
+
+        bool fileWrite = true;
+        std::string dataLog = "../data/data.csv";
+	std::ofstream fileHandle;
+        fileHandle.open(dataLog);
+
+
         // socket stuff
 	int sockfd, connfd;
 	struct sockaddr_in servaddr, cli;
@@ -161,8 +169,9 @@ int main(int argc, char **argv)
 	
 	   
         std::chrono::high_resolution_clock::time_point t1;
-
         std::chrono::high_resolution_clock::time_point t2;
+        std::chrono::high_resolution_clock::time_point tstart;
+        tstart = std::chrono::high_resolution_clock::now();
 
   
 
@@ -171,12 +180,12 @@ int main(int argc, char **argv)
         std::chrono::steady_clock::time_point end;
 
 
-	//ros::init(argc, argv, "listener");
-	//ros::NodeHandle n;
-	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
+	ros::init(argc, argv, "listener");
+	ros::NodeHandle n;
+	ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
 	//ros::spin();
 	while(1){
-		//ros::spinOnce();
+		ros::spinOnce();
 		t1 = std::chrono::high_resolution_clock::now();
 		//read(sockfd, buffMAX, sizeof(buffMAX));
 		//bzero(buff, sizeof(buff));
@@ -321,6 +330,20 @@ int main(int argc, char **argv)
                 //  std::cout << x0 << "," << x1 << std::endl;
 		t2 = std::chrono::high_resolution_clock::now();
                 std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
+
+                if (fileWrite)
+                  fileHandle << std::chrono::duration_cast<std::chrono::nanoseconds>(t2-tstart).count()*1e-9 << "," << state.x << "," << state.y << "," << state.z << "," << state.q_w<< "," << state.q_x << "," << state.q_y << "," << state.q_z << "," << tmp[0] << "," << tmp[1] << "," << tmp[2] << "," << tmp[3] << "," << tmp[4] << "," << tmp[5] << "," << tmp[6] << "," << tmp[7] << "," << tmp[8] << "," << tmp[9]<<std::endl;
+
+
+
+
+
+
+
+
+
+                
+
 	}
 
 	close(sockfd);

@@ -73,25 +73,25 @@ void setup() {
   koios = new Koios(tENC, elmo);
   koios->initKoios1(1);
   
-//  //koios->initKoios2();
-//  delay(250);
-//  koios->STO(1);
-//  koios-> waitSwitch(1); //manual switch on robot
-//  delay(250);
-//  rt = koios->motorsOn();
-//  delay(5000);
-//  koios->resetStates();
-//  koios->setLEDs("0100");
-//  koios->waitSwitch(0);
-//  koios-> setLogo('A');
-//  delay(5000);
-//  koios->flashG(2);
-//  delay(5000);
-//  rt = threads.setSliceMicros(50);
-//  threads.addThread(imuThread);
-//  koios->setLEDs("0001");
-//  koios->setLogo('G');
-//  delay(2000);
+  //koios->initKoios2();
+  delay(250);
+  koios->STO(1);
+  koios-> waitSwitch(1); //manual switch on robot
+  delay(250);
+  rt = koios->motorsOn();
+  delay(5000);
+  koios->resetStates();
+  koios->setLEDs("0100");
+  koios->waitSwitch(0);
+  koios-> setLogo('A');
+  delay(5000);
+  koios->flashG(2);
+  delay(5000);
+  rt = threads.setSliceMicros(50);
+  threads.addThread(imuThread);
+  koios->setLEDs("0001");
+  koios->setLogo('G');
+  delay(2000);
   Serial7.clear();
 }
 
@@ -300,27 +300,27 @@ void loop() {
 //  Serial7.flush();
 //  sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
 //  Serial.println(messageFromRobot);
-//    state[0] = v1;
-//    state[1] = v2;
-//    state[2] = v3;
-//    state[3] = DY;
-//    state[4] = DP;
-//    state[5] = DR;
-//    state[6] = Q0;
-//    state[7] = Q1;
-//    state[8] = Q2;
-//    state[9] = Q3;
+    state[0] = v1;
+    state[1] = v2;
+    state[2] = v3;
+    state[3] = DY;
+    state[4] = DP;
+    state[5] = DR;
+    state[6] = Q0;
+    state[7] = Q1;
+    state[8] = Q2;
+    state[9] = Q3;
 
-    state[0] = 1.23;
-    state[1] = 5.4;
-    state[2] = 1.23423;
-    state[3] = 0;
-    state[4] = 0;
-    state[5] = 0.1234;
-    state[6] = 123.123;
-    state[7] = 1;
-    state[8] = 123.12;
-    state[9] = 3;
+//    state[0] = 1.23;
+//    state[1] = 5.4;
+//    state[2] = 1.23423;
+//    state[3] = 0;
+//    state[4] = 0;
+//    state[5] = 0.1234;
+//    state[6] = 123.123;
+//    state[7] = 1;
+//    state[8] = 123.12;
+//    state[9] = 3;
 
     receivedCharsTeensy[0] = 0b11111111;
     receivedCharsTeensy[1] = 0b11111111;
@@ -359,11 +359,6 @@ void loop() {
 
 
 
-//  if (newData == true) {
-////     Serial.println(receivedChars);
-////  
-//    TokenizeStringToFloats(receivedChars, x_d);
-//
 //         //Safety
 ////    for (int i = 0; i < 3; i++) {
 ////      if (currents[i] > MAX_CURRENT) {
@@ -386,17 +381,16 @@ for (int i = 0; i < 4; i++) {
 float state_d[7];
 memcpy(state_d, receivedCharsESP+2, 7*4);
 
-     Serial.print(state_d[0]); Serial.print(", ");
-     Serial.print(state_d[1]); Serial.print(", ");
-     Serial.print(state_d[2]); Serial.print(", ");
-     Serial.print(state_d[3]); Serial.print(", ");
-     Serial.print(state_d[4]); Serial.print(", ");
-     Serial.print(state_d[5]); Serial.print(", ");
-     Serial.print(state_d[6]);
-     Serial.println();
-//     
-//     newData = false;
-//  }
+// Print the desired state
+//     Serial.print(state_d[0]); Serial.print(", ");
+//     Serial.print(state_d[1]); Serial.print(", ");
+//     Serial.print(state_d[2]); Serial.print(", ");
+//     Serial.print(state_d[3]); Serial.print(", ");
+//     Serial.print(state_d[4]); Serial.print(", ");
+//     Serial.print(state_d[5]); Serial.print(", ");
+//     Serial.print(state_d[6]);
+//     Serial.println();
+
 
    //use for the communication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]

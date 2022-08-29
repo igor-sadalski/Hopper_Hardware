@@ -1,0 +1,107 @@
+%% Read Data
+clear;clc;clf;
+A = readmatrix('../data/data.csv');
+param = yaml.loadFile("../config/gains.yaml");
+
+ind = 1;
+t = (A(:,ind)-A(1,ind));        ind=ind+1; % Sample time
+pos = A(:,ind:ind+2);           ind=ind+3;
+quat = A(:,ind:ind+3);          ind=ind+4;
+wheel_vel = A(:,ind:ind+2);     ind=ind+3;
+omega = A(:,ind:ind+2);         ind=ind+3;
+quat_teensy = A(:,ind:ind+3);   ind=ind+4;
+
+%%
+clf
+
+hfig1 = figure(1);
+set(hfig1,'WindowStyle','normal');
+tg = uitabgroup(hfig1);
+
+c3 = lines(3);
+c4 = lines(4);
+
+tabPlotSingle(tg,t,pos,'Pos')
+% plot(t,contact)
+tabPlotSingle(tg,t,dt,quat,'Quat')
+for i =1:4
+    tmp_y = [quat_MPC(:,i:4:end)'; nan(1,size(tau,2))];
+    tmp_x = [tau;  nan(1,size(tau,2))];
+    plot(tmp_x(:), tmp_y(:),'--','color',c4(i,:))
+end
+tabPlotSingle(tg,t,dt,vel,'Vel')
+for i =1:3
+    tmp_y = [vel_MPC(:,i:3:end)'; nan(1,size(tau,2))];
+    tmp_x = [tau;  nan(1,size(tau,2))];
+    plot(tmp_x(:), tmp_y(:),'--','color',c3(i,:))
+end
+% for i =1:3
+%     for j = 1:N
+%         vel_error(j,:,i) = vel_MPC(:,i+3*(j-1))' - interp1(t,vel(:,i),tau(j,:));
+%     end
+% end
+% tabPlotSingle(tg,t,dt,0*vel,'Vel_error')
+% for i =1:3
+%     tmp_y = [vel_error(:,:,i); nan(1,size(tau,2))];
+%     tmp_x = [tau;  nan(1,size(tau,2))];
+%     plot(tmp_x(:), tmp_y(:),'--','color',c3(i,:))
+% end
+
+tabPlotSingle(tg,t,dt,quat*0,'d_bar')
+tmp_y = [d_MPC(:,1:end)'; nan(1,size(tau,2))];
+tmp_x = [tau(1:end-1,:);  nan(1,size(tau,2))];
+plot(tmp_x(:), tmp_y(:),'--','color',c3(1,:))
+
+tabPlotSingle(tg,t,dt,omega,'Omega')
+for i =1:3
+    tmp_y = [omega_MPC(:,i:3:end)'; nan(1,size(tau,2))];
+    tmp_x = [tau;  nan(1,size(tau,2))];
+    plot(tmp_x(:), tmp_y(:),'--','color',c3(i,:))
+end
+tabPlotSingle(tg,t,dt,l,'Length')
+tmp_y = [l_MPC(:,1:end)'; nan(1,size(tau,2))];
+tmp_x = [tau;  nan(1,size(tau,2))];
+plot(tmp_x(:), tmp_y(:),'--','color',c3(1,:))
+tabPlotSingle(tg,t,dt,torque,'Torque')
+for i =1:3
+    tmp_y = [torque_MPC(:,(i+1):4:end)'; nan(1,size(tau_u,2))];
+    tmp_x = [tau_u;  nan(1,size(tau_u,2))];
+    stairs(tmp_x(:), tmp_y(:),'--','color',c4(i+1,:))
+end
+tabPlotSingle(tg,t,dt,wheel_vel,'Wheel Vel')
+for i =1:3
+    tmp_y = [wheel_omega_MPC(:,i:3:end)'; nan(1,size(tau,2))];
+    tmp_x = [tau;  nan(1,size(tau,2))];
+    plot(tmp_x(:), tmp_y(:),'--','color',c3(i,:))
+end
+
+
+
+function tabPlot(tg,t,dt,ph,x, x_pred,title)
+h = uitab(tg, 'Title', title);
+ax = axes('Parent', h);
+hold on
+c = lines(size(x,2));
+for i = 1:size(x,2)
+    plot(t,x(:,i),'color',c(i,:));
+    plot(t+dt*ph,x_pred(:,i),'--','color','k');
+end
+% for tau = 0:dt:t(end)
+%     line([tau tau],ax.YLim,'color',[0 0 0 .1])
+% %     xline(tau,'alpha',.1)
+% end
+end
+
+function tabPlotSingle(tg,t,dt,x,title)
+h = uitab(tg, 'Title', title);
+ax = axes('Parent', h);
+hold on
+c = lines(size(x,2));
+for i = 1:size(x,2)
+    plot(t,x(:,i),'color',c(i,:));
+end
+% for tau = 0:dt:t(end)
+%     line([tau tau],ax.YLim,'color',[0 0 0 .1])
+% %     xline(tau,'alpha',.1)
+% end
+end
