@@ -197,7 +197,7 @@ int main(int argc, char **argv)
 		  x0 = std::bitset<8>(start_msg[0]);
 		  x1 = std::bitset<8>(start_msg[1]);
 		  //std::cout << (x0 != 0b11111111) << ", " << (x1 != 0b11111111) << "," <<((x0 != 0b11111111) && (x1 != 0b11111111)) << std::endl;
-		  std::cout << x0 << "," << x1 << std::endl;
+		  //std::cout << x0 << "," << x1 << std::endl;
                 }
 		if ((x0 != 0b11111111) && (x1 == 0b11111111)) {
 		  read(sockfd, start_msg, sizeof(char));
@@ -213,18 +213,18 @@ int main(int argc, char **argv)
 		//printf("%s \n", buff);	
 		char oneAdded[6];
 		memcpy(oneAdded, buff+40, 6*sizeof(char));
-		std::cout << "Message: " << std::endl;
-		for (int i = 0; i < 40; i++) {
-			std::bitset<8> x(buff[i]);
-			std::cout << x << " ";
-		}
-		std::cout << std::endl;
-		std::cout << "One added: " << std::endl;
-		for (int i = 0; i < 6; i++) {
-			std::bitset<8> x(oneAdded[i]);
-			std::cout << x << " ";
-		}
-		std::cout << std::endl;
+		//std::cout << "Message: " << std::endl;
+		//for (int i = 0; i < 40; i++) {
+		//	std::bitset<8> x(buff[i]);
+		//	std::cout << x << " ";
+		//}
+		//std::cout << std::endl;
+		//std::cout << "One added: " << std::endl;
+		//for (int i = 0; i < 6; i++) {
+		//	std::bitset<8> x(oneAdded[i]);
+		//	std::cout << x << " ";
+		//}
+		//std::cout << std::endl;
 		for (int i = 0; i < 6; i++) {
 	          for (int j = 1; j < 8; j++) {
 	            if(oneAdded[i] & (1 << (8-j))) {
@@ -235,12 +235,12 @@ int main(int argc, char **argv)
 
 		float tmp[10];
 		memcpy(&tmp, buff, 10*sizeof(float));
-		//std::cout << "Message: ";
-		//for (int i = 0; i < 10; i++) {
-     	        //  std::cout << tmp[i] << ", ";
-		//}
-		//std::cout << std::endl;
-		//std::cout <<"Global state: " << state.x << ", " << state.y << ", " << state.z <<std::endl;
+		std::cout << "Message: ";
+		for (int i = 0; i < 10; i++) {
+     	          std::cout << tmp[i] << ", ";
+		}
+		std::cout << std::endl;
+		std::cout <<"Global state: " << state.x << ", " << state.y << ", " << state.z <<std::endl;
 
 
 		// ROS stuff
@@ -272,13 +272,13 @@ int main(int argc, char **argv)
 		//torque << 0,0,10.1234;
 		//bzero(send_buff, sizeof(send_buff));
 		////sprintf(send_buff,"<{%.4f,%.4f,%.4f}>",torque(0)/const_wheels, torque(1)/const_wheels, torque(2))/const_wheels;	
-		scalar_t qd_w = 0.0;
-		scalar_t qd_x = 0.0;
-		scalar_t qd_y = 0.0;
-		scalar_t qd_z = 0.0;
-		scalar_t wd_x = 0.0;
-		scalar_t wd_y = 0.0;
-		scalar_t wd_z = 0.0;
+		scalar_t qd_w = 1.0;
+		scalar_t qd_x = 2.0;
+		scalar_t qd_y = 3.0;
+		scalar_t qd_z = 4.0;
+		scalar_t wd_x = 1.0;
+		scalar_t wd_y = 2.0;
+		scalar_t wd_z = 3.0;
 		float d_state[7];
 		d_state[0] = qd_w;
 		d_state[1] = qd_x;

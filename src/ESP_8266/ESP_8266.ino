@@ -62,107 +62,52 @@ void loop() {
 
   float state[10] = {1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342};
   
-  char receivedCharsTeensy[10 * sizeof(float) + 8 + 6];
-  char sendCharsTeensy[34];
-  char sendCharsTeensy2[34];
+  char receivedCharsTeensy[10 * sizeof(float) + 8 + 1];
+  char receivedCharsPC[34];
+  char sendCharsTeensy[34+1];
   float tmp2[3] = {1.435, 1.123, 5.025};
   char emptyByte[2] = {0b00000000, 0b00000000};
-//    sendCharsTeensy[0] = 0b00000000;
-//    sendCharsTeensy[1] = 0b00000000;
-    sendCharsTeensy[2] = 0b11111111;
-    sendCharsTeensy[3] = 0b11111111;
 
   WiFiClient client = server.available();
 
   if (client) {
-    for (int i = 0; i < 48 + 6; i++) {
+    for (int i = 0; i < 48; i++) {
       receivedCharsTeensy[i] = 0b10;
     }
     for (int i = 0; i < 2; i++) {
       receivedCharsTeensy[i] = 0b11111111;
     }
-    for (int i = 42; i < 50; i++) {
-      receivedCharsTeensy[i] = 0b1;
-    }
+    receivedCharsTeensy[48] = 0b0;
     client.flush();
     delay(2000);
     while (client.connected()) {
 
-      char sendChars[10 * sizeof(float) + 8];
-      int index = 0;
-      //      while(index < 48+6) {
-      //        if (Serial.available() > 0) {
-      //          receivedCharsTeensy[index] = Serial.read();
-      //          index++;
-      //        }
-      //      }
-      memcpy(sendChars, receivedCharsTeensy, sizeof(sendChars));
-      sendChars[48] = 0b0;
-      client.print(sendChars); //turned off for debugging
-
-      // The sendChar array is not altered, so the issue is 
-      // with the client buffer somehow.
-//      for (int i = 0; i < 80; i++) {
-//        Serial.print(sendChars[i], BIN);
-//        Serial.print(" ");
-//      }
-//      Serial.println();
       
-      client.flush();
-
-      char receivedCharsPC[34];
-      //      index = 0;
-      //      if (client.available() > 0) {
-      while (index < 34) {
-        if (client.available() > 0) {
-          byte inByte = client.read();
-          receivedCharsPC[index] = inByte;
+      int index = 0;
+      while(index < 48) {
+        if (Serial.available() > 0) {
+          receivedCharsTeensy[index] = Serial.read();
           index++;
         }
       }
-      //      }
-      //
+      client.print(receivedCharsTeensy); //turned off for debugging
+      client.flush();
+
+      index = 0;
+      while (index < 34) {
+        if (client.available() > 0) {
+          receivedCharsPC[index] = client.read();
+          index++;
+        }
+      }
+
             memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
+            sendCharsTeensy[34] = 0b0;
             Serial.print(sendCharsTeensy); //turned off for debugging
-      //      Serial.flush();
-      //      sendCharsTeensy[0] = receivedCharsPC[0];
-
-      //      for (int i = 2; i < 30; i++) {
-      //        Serial.print(receivedCharsPC[i], BIN);
-      //        Serial.print(" ");
-      //      }
-      //      Serial.println();
-//          for (int i = 0; i < 2; i++) {
-//              Serial.print(emptyByte[i], BIN);
-//              Serial.print(" ");
-//            }
-//            Serial.println();
-
-
-
-//            for (int i = 0; i < 34; i++) {
-//              Serial.print(receivedCharsPC[i], BIN);
-//              Serial.print(" ");
-//            }
-//            Serial.println();
 
             
+      //      Serial.flush();
 
-      //delay(20);
-
-
-      //        ReadMessageFromTeensy();
-      //        if (newDataTeensy == true) {
-      //          client.println(receivedCharsTeensy); //turned off for debugging
-      //          client.flush();
-      //          newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
-      //        }
-      //
-      //        ReadMessageFromPC(client);
-      //        if (newDataPC == true) {
-      //           Serial.println(receivedCharsPC);
-      //           newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
-      //        }
     }
     client.stop();
     exit(0);

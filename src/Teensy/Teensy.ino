@@ -260,7 +260,7 @@ void TokenizeStringToFloats(char str[], float currents[]){
 //==========================LOOP=============
 
 void loop() {
-  char receivedCharsTeensy[10*sizeof(float)+8];
+  char receivedCharsTeensy[10*sizeof(float)+8+1];
   static float Q0 = 0;
   static float Q1 = 0;
   static float Q2 = 0;
@@ -311,16 +311,16 @@ void loop() {
 //    state[8] = Q2;
 //    state[9] = Q3;
 
-    state[0] = 0b00000001;
-    state[1] = 0b00000001;
-    state[2] = 0b00000001;
-    state[3] = 0b00000001;
-    state[4] = 0b00000001;
-    state[5] = 0b00000001;
-    state[6] = 0b00000001;
-    state[7] = 0b00000001;
-    state[8] = 0b00000001;
-    state[9] = 0b00000001;
+    state[0] = 1.23;
+    state[1] = 5.4;
+    state[2] = 1.23423;
+    state[3] = 0;
+    state[4] = 0;
+    state[5] = 0.1234;
+    state[6] = 123.123;
+    state[7] = 1;
+    state[8] = 123.12;
+    state[9] = 3;
 
     receivedCharsTeensy[0] = 0b11111111;
     receivedCharsTeensy[1] = 0b11111111;
@@ -336,31 +336,11 @@ void loop() {
          }
          memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
      }
-
-//     Serial7.print(receivedCharsTeensy);
-//     Serial7.flush();
-
-
+     receivedCharsTeensy[48] = 0b0;
      
-//     for (int i = 0; i < 48; i++) {
-//      Serial.print(receivedCharsTeensy[i], BIN);
-//      Serial.print(" ");
-//     }
-//     Serial.println();
-//     delay(100);
-     
-//     delay(1000);
-
+     Serial7.print(receivedCharsTeensy);
+     Serial7.flush();
   
-  //delayLoop(micros(),100);  
-  //Serial7.addMemoryForWrite(additional_write_buffer, sizeof(additional_write_buffer));
-  
-  //Serial7.flush(); //wait for any transmitted data still in buffers to atransmit
-  
-  //Increase the amount of buffer memory between reception of bytes by the serial 
-  //hardware and the available() and read() functions.
-  //Serial7.addMemoryForRead(additional_read_buffer, sizeof(additional_read_buffer));
-//  ReadMessage();
   int index = 0;
   char receivedCharsESP[34];
   while(index < 34) {
@@ -369,47 +349,54 @@ void loop() {
       index++;
     }
   }
-//  Serial7.clear(); //Discard any received data that has not been read.  
-  index = 0;
-  while(index < 6) {
-    if (Serial7.available() > 0) {
-      Serial7.read();
-      index++;
+
+// Print Binary
+//  for (int i = 0; i < 34; i++) {
+//    Serial.print(receivedCharsESP[i], BIN);
+//    Serial.print(" ");
+//  }
+//  Serial.println();
+
+
+
+//  if (newData == true) {
+////     Serial.println(receivedChars);
+////  
+//    TokenizeStringToFloats(receivedChars, x_d);
+//
+//         //Safety
+////    for (int i = 0; i < 3; i++) {
+////      if (currents[i] > MAX_CURRENT) {
+////        currents[i] = MAX_CURRENT;
+////      } else if (currents[i] < MIN_CURRENT) {
+////        currents[i] = MIN_CURRENT;
+////      }
+////    }
+
+char oneAdded[4];
+memcpy(oneAdded, receivedCharsESP+2+28, 4*sizeof(char));
+for (int i = 0; i < 4; i++) {
+  for (int j = 1; j < 8; j++) {
+    if(oneAdded[i] & (1 << (8-j))) {
+      receivedCharsESP[2+i*7+(j-1)] = 0;
     }
   }
-  for (int i = 0; i < 34; i++) {
-    Serial.print(receivedCharsESP[i], BIN);
-    Serial.print(" ");
-  }
-  Serial.println();
+}
 
+float state_d[7];
+memcpy(state_d, receivedCharsESP+2, 7*4);
 
-
-  if (newData == true) {
-//     Serial.println(receivedChars);
-//  
-    TokenizeStringToFloats(receivedChars, x_d);
-
-         //Safety
-//    for (int i = 0; i < 3; i++) {
-//      if (currents[i] > MAX_CURRENT) {
-//        currents[i] = MAX_CURRENT;
-//      } else if (currents[i] < MIN_CURRENT) {
-//        currents[i] = MIN_CURRENT;
-//      }
-//    }
-  
-     Serial.println(x_d[0]);
-     Serial.println(x_d[1]);
-     Serial.println(x_d[2]);
-     Serial.println(x_d[3]);
-     Serial.println(x_d[4]);
-     Serial.println(x_d[5]);
-     Serial.println(x_d[6]);
+     Serial.print(state_d[0]); Serial.print(", ");
+     Serial.print(state_d[1]); Serial.print(", ");
+     Serial.print(state_d[2]); Serial.print(", ");
+     Serial.print(state_d[3]); Serial.print(", ");
+     Serial.print(state_d[4]); Serial.print(", ");
+     Serial.print(state_d[5]); Serial.print(", ");
+     Serial.print(state_d[6]);
      Serial.println();
-     
-     newData = false;
-  }
+//     
+//     newData = false;
+//  }
 
    //use for the communication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
