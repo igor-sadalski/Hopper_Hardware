@@ -17,8 +17,30 @@ Steps to make this work:
 * Upload
 2. Flash the teensy with the teensy code
 * Board->Teensyduino->Teensy4.1
-* Port USB0
+* Port teensy port or something
 3. Start the server code just before the robot reboots
 
-roslaunch vrpn_client_ros fast.launch server:=192.168.1.3
+Starting Sequence for the robot:
+1. Turn on left most switch (enable logic)
+2. If yellow light flashes two times, move on -- if red flight flashes 10 times, abandon
+3. Turn middle switch on (enable elmo power) and wait 5 seconds
+4. Turn on right most swtich. Motors will go through initialization sequence
+5. Wait for the orange light to dissapear
+6. When orange light dissapears, turn off the right most swtich
+7. Wait for the Archer symbol to go green
+8. Initiate server fille (./build/hopper)
+
+Starting optitrck:
+* roslaunch vrpn_client_ros fast.launch server:=192.168.1.3
+
+Igor's troubleshooting steps:
+* Make sure that the ports/boards are selected properly
+* Unconnect ESP when flashing to the robot
+* Make sure to check RX/TX if you are not recieving any messages
+* Make sure the robot is on to flash teensy code
+* CHECK THE BATTERIES (the beeping tool) -- current in cells to be at least 3.8 V
+* Ping the ESP board to make sure that IP address is correct
+* Close open serial ports to make sure that flashing works properly
+
+
 

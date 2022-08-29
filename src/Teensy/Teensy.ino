@@ -16,11 +16,11 @@ using namespace Archer;
 TripENC tENC(trip_CS1,trip_CS2,trip_CS3);
 ELMO_CANt4 elmo;
 
-float currents[4];
+float x_d[7];
 
 
-#define MAX_CURRENT 1
-#define MIN_CURRENT -1
+#define MAX_CURRENT 15
+#define MIN_CURRENT -15
 
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
@@ -47,6 +47,8 @@ char receivedChars[numChars]; //change here to get more charactes in the string
 boolean newData = false;
 //this is only for the first debugging run
 char messageFromRobot[128]; //fill in the exact length of the message you will be sending
+char exactMessage[40]; //fill in the exact length of the message you will be sending
+float state[10];
 
 //===========SPEEDING UP BABY
 char additional_read_buffer[3000]; //this values are out of nowhere
@@ -58,7 +60,7 @@ void setup() {
 
   //====================WIFI==============
   delay(100); //give time to open and print
-  //Serial.begin(115200); //this is for the monitor
+  Serial.begin(115200); //this is for the monitor
   Serial7.begin(115200); //baud rates must be the same
   while (!Serial7) {;}
   delay(100);
@@ -71,24 +73,26 @@ void setup() {
   koios = new Koios(tENC, elmo);
   koios->initKoios1(1);
   
-//  //koios->initKoios2();
-//  delay(250);
-//  koios->STO(1);
-//  koios-> waitSwitch(1); //manual switch on robot
-//  delay(250);
-//  rt = koios->motorsOn();
-//  delay(5000);
-//  koios->resetStates();
-//  koios->setLEDs("0100");
-//  koios->waitSwitch(0);
-//  koios-> setLogo('A');
-//  delay(5000);
-//  koios->flashG(2);
-//  delay(5000);
-//  rt = threads.setSliceMicros(50);
-//  threads.addThread(imuThread);
-//  koios->setLEDs("0001");
-//  koios->setLogo('G');
+  //koios->initKoios2();
+  delay(250);
+  koios->STO(1);
+  koios-> waitSwitch(1); //manual switch on robot
+  delay(250);
+  rt = koios->motorsOn();
+  delay(5000);
+  koios->resetStates();
+  koios->setLEDs("0100");
+  koios->waitSwitch(0);
+  koios-> setLogo('A');
+  delay(5000);
+  koios->flashG(2);
+  delay(5000);
+  rt = threads.setSliceMicros(50);
+  threads.addThread(imuThread);
+  koios->setLEDs("0001");
+  koios->setLogo('G');
+  delay(2000);
+  Serial7.clear();
 }
 
 //============FUNCTIONS==========
@@ -256,6 +260,7 @@ void TokenizeStringToFloats(char str[], float currents[]){
 //==========================LOOP=============
 
 void loop() {
+  char receivedCharsTeensy[10*sizeof(float)+8+1];
   static float Q0 = 0;
   static float Q1 = 0;
   static float Q2 = 0;
@@ -284,38 +289,108 @@ void loop() {
   //use this for sending actual floats to the robot
   //use <...> to denote how message is beginning/ending
   //for some reason order of sending is important
-  sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
-  //delayLoop(micros(),100);  
-  //Serial7.addMemoryForWrite(additional_write_buffer, sizeof(additional_write_buffer));
-  Serial7.println(messageFromRobot);
-  //Serial7.flush(); //wait for any transmitted data still in buffers to atransmit
   
-  //Increase the amount of buffer memory between reception of bytes by the serial 
-  //hardware and the available() and read() functions.
-  //Serial7.addMemoryForRead(additional_read_buffer, sizeof(additional_read_buffer));
-  ReadMessage();
-  Serial7.clear(); //Discard any received data that has not been read.  
-  if (newData == true) {
-     //Serial.println(receivedChars);
-  
-    TokenizeStringToFloats(receivedChars, currents);
+  // String communication
+  //sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
+  //Serial7.println(messageFromRobot);
 
-         //Safety
-    for (int i = 0; i < 3; i++) {
-      if (currents[i] > MAX_CURRENT) {
-        currents[i] = MAX_CURRENT;
-      } else if (currents[i] < MIN_CURRENT) {
-        currents[i] = MIN_CURRENT;
-      }
-    }
-  
-     //Serial.println(currents[0]);
-     //Serial.println(currents[1]);
-     //Serial.println(currents[2]);
-     //Serial.println();
+//  exactMessage[0] = '<';
+//  exactMessage[41] = '>';
+//  Serial7.println(exactMessage);
+//  Serial7.flush();
+//  sprintf(messageFromRobot,"<%f,%f,%f,%f,%f,%f,%f,%f,%f,%f>",v1,v2,v3,DY,DP,DR,Q0, Q1, Q2, Q3); 
+//  Serial.println(messageFromRobot);
+    state[0] = v1;
+    state[1] = v2;
+    state[2] = v3;
+    state[3] = DY;
+    state[4] = DP;
+    state[5] = DR;
+    state[6] = Q0;
+    state[7] = Q1;
+    state[8] = Q2;
+    state[9] = Q3;
+
+//    state[0] = 1.23;
+//    state[1] = 5.4;
+//    state[2] = 1.23423;
+//    state[3] = 0;
+//    state[4] = 0;
+//    state[5] = 0.1234;
+//    state[6] = 123.123;
+//    state[7] = 1;
+//    state[8] = 123.12;
+//    state[9] = 3;
+
+    receivedCharsTeensy[0] = 0b11111111;
+    receivedCharsTeensy[1] = 0b11111111;
+    memcpy(receivedCharsTeensy+2, state, 40);
      
-     newData = false;
+     for (int i = 0; i < 6; i++) {
+         byte oneAdded = 0b00000001;
+         for (int j = 1; j < 8; j++){
+           if (receivedCharsTeensy[i*7+(j-1)+2] == 0b00000000) {
+             receivedCharsTeensy[i*7+(j-1)+2] = 0b00000001;
+             oneAdded += (1 << (8-j));
+           }
+         }
+         memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
+     }
+     receivedCharsTeensy[48] = 0b0;
+     
+     Serial7.print(receivedCharsTeensy);
+     Serial7.flush();
+  
+  int index = 0;
+  char receivedCharsESP[34];
+  while(index < 34) {
+    if (Serial7.available() > 0) {
+      receivedCharsESP[index] = Serial7.read();
+      index++;
+    }
   }
+
+// Print Binary
+//  for (int i = 0; i < 34; i++) {
+//    Serial.print(receivedCharsESP[i], BIN);
+//    Serial.print(" ");
+//  }
+//  Serial.println();
+
+
+
+//         //Safety
+////    for (int i = 0; i < 3; i++) {
+////      if (currents[i] > MAX_CURRENT) {
+////        currents[i] = MAX_CURRENT;
+////      } else if (currents[i] < MIN_CURRENT) {
+////        currents[i] = MIN_CURRENT;
+////      }
+////    }
+
+char oneAdded[4];
+memcpy(oneAdded, receivedCharsESP+2+28, 4*sizeof(char));
+for (int i = 0; i < 4; i++) {
+  for (int j = 1; j < 8; j++) {
+    if(oneAdded[i] & (1 << (8-j))) {
+      receivedCharsESP[2+i*7+(j-1)] = 0;
+    }
+  }
+}
+
+float state_d[7];
+memcpy(state_d, receivedCharsESP+2, 7*4);
+
+// Print the desired state
+//     Serial.print(state_d[0]); Serial.print(", ");
+//     Serial.print(state_d[1]); Serial.print(", ");
+//     Serial.print(state_d[2]); Serial.print(", ");
+//     Serial.print(state_d[3]); Serial.print(", ");
+//     Serial.print(state_d[4]); Serial.print(", ");
+//     Serial.print(state_d[5]); Serial.print(", ");
+//     Serial.print(state_d[6]);
+//     Serial.println();
+
 
    //use for the communication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
@@ -323,10 +398,10 @@ void loop() {
   //this is done on the PC
 
   //2
-  elmo.cmdTC(currents[0],IDX_K1);
-  elmo.cmdTC(currents[1],IDX_K2);
-  elmo.cmdTC(currents[2],IDX_K3); 
+//  elmo.cmdTC(currents[0],IDX_K1);
+//  elmo.cmdTC(currents[1],IDX_K2);
+//  elmo.cmdTC(currents[2],IDX_K3); 
 
   // send u4 current command to leg over serial RX/TX between teensy boards
-  delay(1);
+//  delay(1);
 }
