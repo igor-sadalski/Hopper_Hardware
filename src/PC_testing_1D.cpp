@@ -213,18 +213,18 @@ int main(int argc, char **argv)
 		//printf("%s \n", buff);	
 		char oneAdded[6];
 		memcpy(oneAdded, buff+40, 6*sizeof(char));
-		std::cout << "Message: " << std::endl;
-		for (int i = 0; i < 40; i++) {
-			std::bitset<8> x(buff[i]);
-			std::cout << x << " ";
-		}
-		std::cout << std::endl;
-		std::cout << "One added: " << std::endl;
-		for (int i = 0; i < 6; i++) {
-			std::bitset<8> x(oneAdded[i]);
-			std::cout << x << " ";
-		}
-		std::cout << std::endl;
+		//std::cout << "Message: " << std::endl;
+		//for (int i = 0; i < 40; i++) {
+		//	std::bitset<8> x(buff[i]);
+		//	std::cout << x << " ";
+		//}
+		//std::cout << std::endl;
+		//std::cout << "One added: " << std::endl;
+		//for (int i = 0; i < 6; i++) {
+		//	std::bitset<8> x(oneAdded[i]);
+		//	std::cout << x << " ";
+		//}
+		//std::cout << std::endl;
 		for (int i = 0; i < 6; i++) {
 	          for (int j = 1; j < 8; j++) {
 	            if(oneAdded[i] & (1 << (8-j))) {

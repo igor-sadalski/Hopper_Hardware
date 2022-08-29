@@ -1,11 +1,11 @@
 /*
- * working two way communication ESP to PC sending strings
+   working two way communication ESP to PC sending strings
 */
 
 #include <ESP8266WiFi.h> //lib for esp chipp
 
-const char *ssid = "NETGEAR35";   
-const char *password = "amberlab"; 
+const char *ssid = "NETGEAR35";
+const char *password = "amberlab";
 
 // Set up TCP server and port number
 int port = 8888;
@@ -23,12 +23,14 @@ boolean newDataPC = false;
 String readValue;
 
 void setup() {
-  
+
   // Begin USB Serial
   delay(100);                    //give time to open serial
   Serial.begin(115200);        //there is only one serial on esp!!!
   // wait for serial port to connect. Needed for native USB
-  while (!Serial) {;}
+  while (!Serial) {
+    ;
+  }
   delay(100);                  //baud rates at both ends must match!!
 
   // configure static IP address
@@ -39,36 +41,41 @@ void setup() {
   // Set to Station mode. ESP8266 connects to desired network
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  
+
   //beging server
   server.begin();
 
   //start a diode to be sure all is working
-  pinMode(LED_BUILTIN,OUTPUT);
-  digitalWrite(LED_BUILTIN,LOW); //to start the diode on ESP turn it to low
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW); //to start the diode on ESP turn it to low
 
-//  Serial.println("STA ready.");
+  //  Serial.println("STA ready.");
 }
 
 union convert {
-   float x[10]; 
-   char b[40];
-   unsigned long long int i[5];
+  float x[10];
+  char b[40];
+  unsigned long long int i[5];
 } val;
 
 void loop() {
 
-  float state[10] = {1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342,1.2342};
-  char sendChars[10*sizeof(float)+8];
-  char receivedCharsTeensy[10*sizeof(float)+8+6];
-  char receivedCharsPC[40]; 
+  float state[10] = {1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342, 1.2342};
+  
+  char receivedCharsTeensy[10 * sizeof(float) + 8 + 6];
   char sendCharsTeensy[34];
+  char sendCharsTeensy2[34];
   float tmp2[3] = {1.435, 1.123, 5.025};
-  
+  char emptyByte[2] = {0b00000000, 0b00000000};
+//    sendCharsTeensy[0] = 0b00000000;
+//    sendCharsTeensy[1] = 0b00000000;
+    sendCharsTeensy[2] = 0b11111111;
+    sendCharsTeensy[3] = 0b11111111;
+
   WiFiClient client = server.available();
-  
+
   if (client) {
-    for (int i = 0; i < 48+6; i++) {
+    for (int i = 0; i < 48 + 6; i++) {
       receivedCharsTeensy[i] = 0b10;
     }
     for (int i = 0; i < 2; i++) {
@@ -79,66 +86,86 @@ void loop() {
     }
     client.flush();
     delay(2000);
-    while(client.connected()){  
+    while (client.connected()) {
 
+      char sendChars[10 * sizeof(float) + 8];
       int index = 0;
-//      while(index < 48+6) {
-//        if (Serial.available() > 0) {
-//          receivedCharsTeensy[index] = Serial.read();
-//          index++;
-//        }
-//      }
+      //      while(index < 48+6) {
+      //        if (Serial.available() > 0) {
+      //          receivedCharsTeensy[index] = Serial.read();
+      //          index++;
+      //        }
+      //      }
       memcpy(sendChars, receivedCharsTeensy, sizeof(sendChars));
+      sendChars[48] = 0b0;
       client.print(sendChars); //turned off for debugging
-      client.flush();
-      
 
-//      index = 0;
-//      if (client.available() > 0) {
-        while(index < 34) {
-          if (client.available() > 0) {
-            receivedCharsPC[index] = client.read();
-            index++;
-          }
-        }
-//      }
-//
-      memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
-
-//      Serial.print(sendCharsTeensy); //turned off for debugging
-//      Serial.flush();
-
-      for (int i = 0; i < 34; i++) {
-        Serial.print(sendCharsTeensy[i], BIN);
-        Serial.print(" ");
-      }
-      Serial.println();
-//      for (int i = 0; i < 48; i++) {
+      // The sendChar array is not altered, so the issue is 
+      // with the client buffer somehow.
+//      for (int i = 0; i < 80; i++) {
 //        Serial.print(sendChars[i], BIN);
 //        Serial.print(" ");
 //      }
 //      Serial.println();
-
-//delay(20);
       
+      client.flush();
 
-//        ReadMessageFromTeensy();
-//        if (newDataTeensy == true) {
-//          client.println(receivedCharsTeensy); //turned off for debugging
-//          client.flush();
-//          newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
-//        }
-//        
-//        ReadMessageFromPC(client);
-//        if (newDataPC == true) {
-//           Serial.println(receivedCharsPC);
-//           newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
-//        }   
+      char receivedCharsPC[34];
+      //      index = 0;
+      //      if (client.available() > 0) {
+      while (index < 34) {
+        if (client.available() > 0) {
+          byte inByte = client.read();
+          receivedCharsPC[index] = inByte;
+          index++;
+        }
+      }
+      //      }
+      //
+      //      memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
+
+      //      Serial.print(sendCharsTeensy); //turned off for debugging
+      //      Serial.flush();
+      //      sendCharsTeensy[0] = receivedCharsPC[0];
+
+      //      for (int i = 2; i < 30; i++) {
+      //        Serial.print(receivedCharsPC[i], BIN);
+      //        Serial.print(" ");
+      //      }
+      //      Serial.println();
+//          for (int i = 0; i < 2; i++) {
+//              Serial.print(emptyByte[i], BIN);
+//              Serial.print(" ");
+//            }
+//            Serial.println();
+            for (int i = 0; i < 34; i++) {
+              Serial.print(receivedCharsPC[i], BIN);
+              Serial.print(" ");
+            }
+            Serial.println();
+
+            
+
+      //delay(20);
+
+
+      //        ReadMessageFromTeensy();
+      //        if (newDataTeensy == true) {
+      //          client.println(receivedCharsTeensy); //turned off for debugging
+      //          client.flush();
+      //          newDataTeensy = false; //this will be overriden by ReadMessageFromTeensy() in future
+      //        }
+      //
+      //        ReadMessageFromPC(client);
+      //        if (newDataPC == true) {
+      //           Serial.println(receivedCharsPC);
+      //           newDataPC = false; //this will be overriden by ReadMessageFromTeensy() in future
+      //        }
     }
     client.stop();
     exit(0);
   }
-}  
+}
 //
 //this reads the messages that start with "<" and end with ">"
 //these two functions look scary but are nearly idential and simple
@@ -173,7 +200,7 @@ void loop() {
 //        }
 //    }
 //}
-////ReadMessageFromTeensy differs from ReadMessageFromTeensy 
+////ReadMessageFromTeensy differs from ReadMessageFromTeensy
 ////by using different soure of where to read info from
 //void ReadMessageFromPC(WiFiClient client) {
 //    static boolean recvInProgress = false;
