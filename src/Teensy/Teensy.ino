@@ -371,7 +371,7 @@ void loop() {
   }
 //  Serial7.clear(); //Discard any received data that has not been read.  
   index = 0;
-  while(index < 4) {
+  while(index < 6) {
     if (Serial7.available() > 0) {
       Serial7.read();
       index++;

@@ -122,9 +122,8 @@ void loop() {
       }
       //      }
       //
-      //      memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
-
-      //      Serial.print(sendCharsTeensy); //turned off for debugging
+            memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
+            Serial.print(sendCharsTeensy); //turned off for debugging
       //      Serial.flush();
       //      sendCharsTeensy[0] = receivedCharsPC[0];
 
@@ -138,11 +137,14 @@ void loop() {
 //              Serial.print(" ");
 //            }
 //            Serial.println();
-            for (int i = 0; i < 34; i++) {
-              Serial.print(receivedCharsPC[i], BIN);
-              Serial.print(" ");
-            }
-            Serial.println();
+
+
+
+//            for (int i = 0; i < 34; i++) {
+//              Serial.print(receivedCharsPC[i], BIN);
+//              Serial.print(" ");
+//            }
+//            Serial.println();
 
             
 
