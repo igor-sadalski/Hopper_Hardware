@@ -272,13 +272,13 @@ int main(int argc, char **argv)
 		//torque << 0,0,10.1234;
 		//bzero(send_buff, sizeof(send_buff));
 		////sprintf(send_buff,"<{%.4f,%.4f,%.4f}>",torque(0)/const_wheels, torque(1)/const_wheels, torque(2))/const_wheels;	
-		scalar_t qd_w = 1.0;
-		scalar_t qd_x = 2.0;
-		scalar_t qd_y = 3.0;
-		scalar_t qd_z = 4.0;
-		scalar_t wd_x = 1.0;
-		scalar_t wd_y = 2.0;
-		scalar_t wd_z = 3.0;
+		scalar_t qd_w = 0.0;
+		scalar_t qd_x = 0.0;
+		scalar_t qd_y = 0.0;
+		scalar_t qd_z = 0.0;
+		scalar_t wd_x = 0.0;
+		scalar_t wd_y = 0.0;
+		scalar_t wd_z = 0.0;
 		float d_state[7];
 		d_state[0] = qd_w;
 		d_state[1] = qd_x;
@@ -308,7 +308,7 @@ int main(int argc, char **argv)
                  }
 		
 		write(sockfd, send_buff, sizeof(send_buff));		
-		usleep(2000);
+		//usleep(20000);
 		//read(sockfd, start_msg, sizeof(start_msg));
 		//x0 = std::bitset<8>(start_msg[0]);
                 //  x1 = std::bitset<8>(start_msg[1]);

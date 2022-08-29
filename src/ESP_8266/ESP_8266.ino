@@ -78,7 +78,7 @@ void loop() {
       receivedCharsTeensy[i] = 0b1;
     }
     client.flush();
-    delay(500);
+    delay(2000);
     while(client.connected()){  
 
       int index = 0;
@@ -91,6 +91,7 @@ void loop() {
       memcpy(sendChars, receivedCharsTeensy, sizeof(sendChars));
       client.print(sendChars); //turned off for debugging
       client.flush();
+      
 
 //      index = 0;
 //      if (client.available() > 0) {
@@ -103,14 +104,22 @@ void loop() {
 //      }
 //
       memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
-////      Serial.print(sendCharsTeensy); //turned off for debugging
-////      Serial.flush();
+
+//      Serial.print(sendCharsTeensy); //turned off for debugging
+//      Serial.flush();
 
       for (int i = 0; i < 34; i++) {
         Serial.print(sendCharsTeensy[i], BIN);
         Serial.print(" ");
       }
       Serial.println();
+//      for (int i = 0; i < 48; i++) {
+//        Serial.print(sendChars[i], BIN);
+//        Serial.print(" ");
+//      }
+//      Serial.println();
+
+//delay(20);
       
 
 //        ReadMessageFromTeensy();

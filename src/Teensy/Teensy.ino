@@ -369,7 +369,14 @@ void loop() {
       index++;
     }
   }
-  Serial7.clear(); //Discard any received data that has not been read.  
+//  Serial7.clear(); //Discard any received data that has not been read.  
+  index = 0;
+  while(index < 4) {
+    if (Serial7.available() > 0) {
+      Serial7.read();
+      index++;
+    }
+  }
   for (int i = 0; i < 34; i++) {
     Serial.print(receivedCharsESP[i], BIN);
     Serial.print(" ");
