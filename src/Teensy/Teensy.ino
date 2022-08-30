@@ -21,8 +21,8 @@ ELMO_CANt4 elmo;
 float x_d[7];
 #define torque_to_current 1.0/0.083
 
-#define MAX_CURRENT 10  //  15
-#define MIN_CURRENT -10 // -15
+#define MAX_CURRENT 12  //  15
+#define MIN_CURRENT -12 // -15
 
 #define TIMEOUT_INTERVAL 500 // ms to timeout
 
@@ -34,7 +34,7 @@ using quat_t = Eigen::Quaternion<float>;
 
 
 #define kp 4.0
-#define kd 0.04
+#define kd 0.4
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
 volatile float dP = 0;
@@ -251,7 +251,7 @@ void getTorque(float* state, vector_3t &torque) {
     omega_d << 0,0,0;
     quat_t quat_a = quat_t(state[6], state[7], state[8], state[9]); // assuming q_w is first.
     quat_a = quat_init.inverse()*quat_a;
-    omega_a << state[3], state[4], state[5];
+    omega_a << state[5], state[4], state[3];
 
     quat_d *= quat_actuator;
     quat_a *= quat_actuator;
