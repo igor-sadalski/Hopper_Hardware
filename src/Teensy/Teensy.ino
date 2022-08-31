@@ -51,6 +51,7 @@ volatile float q2;
 volatile float q3;
 
 quat_t quat_init;
+quat_t quat_init_inverse;
 bool initialized = false;
 bool time_initialized = false;
 
@@ -238,8 +239,9 @@ matrix_3t cross(vector_3t q) {
 unsigned long last_ESP_message;
 unsigned long current_ESP_message;
 char oneAdded[4];
+quat_t quat_a;
 
-void getTorque(float* state, vector_3t &torque) {
+void getTorque(float* state, quat_t quat_a, vector_3t &torque) {
     vector_3t delta_omega;
     vector_3t omega_a;
     vector_3t omega_d;
@@ -249,8 +251,6 @@ void getTorque(float* state, vector_3t &torque) {
     quat_t quat_actuator = quat_t(0.8806, 0.3646, -0.2795, 0.1160);
     quat_t quat_d = quat_t(1,0,0,0);
     omega_d << 0,0,0;
-    quat_t quat_a = quat_t(state[6], state[7], state[8], state[9]); // assuming q_w is first.
-    quat_a = quat_init.inverse()*quat_a;
     omega_a << state[5], state[4], state[3];
 
     quat_d *= quat_actuator;
@@ -342,8 +342,19 @@ void loop() {
   ((state[7] >= 0.01) && (state[7] <= 1)) || 
   ((state[8] >= 0.01) && (state[8] <= 1)) ||
   ((state[9] >= 0.01) && (state[9] <= 1))) ) {
-    quat_init = quat_t(state[6], state[7], state[8], state[9]);
+    quat_init = quat_t(state[9], state[6], state[7], state[8]);
+    quat_init_inverse = quat_init.inverse();
     initialized = true;
+  } 
+
+  if (initialized) {
+    quat_a = quat_t(state[9], state[6], state[7], state[8]); // assuming q_w is last.
+    quat_a = quat_init_inverse*quat_a;
+  
+    state[6] = quat_a.w();
+    state[7] = quat_a.x();
+    state[8] = quat_a.y();
+    state[9] = quat_a.z();
   }
 
   receivedCharsTeensy[0] = 0b11111111;
@@ -418,7 +429,7 @@ void loop() {
   //     Serial.println();
 
 
-   //use for the communication with the wheel motors
+   //use for the counication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
   //for a range of -1.6Nm to 1.6 Nm
   //this is done on the PC
@@ -448,10 +459,17 @@ void loop() {
 //  state[9] = rand_quat.z();
 
   vector_3t current; 
-  getTorque(state, current);
-//  Serial.print(torque[0]); Serial.print(" ");
-//  Serial.print(torque[1]); Serial.print(" ");
-//  Serial.print(torque[2]); Serial.print(" ");
+  if (initialized) {
+    getTorque(state, quat_a, current);  
+  } else {
+    current[0] = 0;
+    current[1] = 0;
+    current[2] = 0;
+  }
+  
+//  Serial.print(current[0]); Serial.print(" ");
+//  Serial.print(current[1]); Serial.print(" ");
+//  Serial.print(current[2]); Serial.print(" ");
 //  Serial.println();
 
   ////////////////////Safety///////////////////////

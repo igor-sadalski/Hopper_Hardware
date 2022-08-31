@@ -1,6 +1,4 @@
 build/
 data/
-<<<<<<< HEAD
-=======
+*.csv
 *.swp
->>>>>>> 6634fca31932d71519ae0d080c0f05d015f2c242
