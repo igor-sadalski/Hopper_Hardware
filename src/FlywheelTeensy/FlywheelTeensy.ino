@@ -24,7 +24,7 @@ float x_d[7];
 #define MAX_CURRENT 12  //  15
 #define MIN_CURRENT -12 // -15
 
-#define TIMEOUT_INTERVAL 500 // ms to timeout
+#define TIMEOUT_INTERVAL 100 // ms to timeout
 
 using vector_3t = Eigen::Matrix<float, 3, 1>;
 using vector_4t = Eigen::Matrix<float, 4, 1>;
@@ -92,8 +92,8 @@ void setup() {
   //================Koios=============
   koios = new Koios(tENC, elmo);
   koios->initKoios1(1);
-  
-  //koios->initKoios2();
+
+  // initKoios2
   delay(250);
   koios->STO(1);
   koios-> waitSwitch(1); //manual switch on robot
@@ -107,11 +107,13 @@ void setup() {
   delay(5000);
   koios->flashG(2);
   delay(5000);
+
+  
   rt = threads.setSliceMicros(50);
   threads.addThread(imuThread);
   koios->setLEDs("0001");
   koios->setLogo('G');
-  delay(2000);
+//  delay(500);
   Serial7.clear();
 }
 
@@ -272,22 +274,6 @@ void getTorque(float* state, quat_t quat_a, vector_3t &torque) {
     delta_omega = -quat_actuator.inverse()._transformVector(omega_a) - omega_d;
     tau = -Kp * delta_quat - Kd * delta_omega;
 
-//  Serial.print(state[6]); Serial.print(" ");
-//  Serial.print(state[7]); Serial.print(" ");
-//  Serial.print(state[8]); Serial.print(" ");
-//  Serial.print(state[9]); Serial.println(";      ");
-//    Serial.print("quat_init: ");
-//    Serial.print(quat_init.w()); Serial.print(" ");
-//    Serial.print(quat_init.x()); Serial.print(" ");
-//    Serial.print(quat_init.y()); Serial.print(" ");
-//    Serial.print(quat_init.z()); Serial.print(";      ");
-//    Serial.println();
-//    Serial.print("delta_quat: ");
-//    Serial.print(delta_quat(0)); Serial.print(" ");
-//    Serial.print(delta_quat(1)); Serial.print(" ");
-//    Serial.print(delta_quat(2)); Serial.print(" ");
-//    Serial.println();
-
     torque << tau*torque_to_current;
 }
 
@@ -300,6 +286,8 @@ void exitProgram() {
     elmo.cmdTC(0.0,IDX_K2);
     elmo.cmdTC(0.0,IDX_K3); 
     koios->motorsOff(0);
+    koios->setLEDs("1000");
+    koios->setLogo('R');
     while(1) {};
 }
 
@@ -429,35 +417,10 @@ void loop() {
   //     Serial.println();
 
 
-   //use for the counication with the wheel motors
+
+  //use for the counication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
   //for a range of -1.6Nm to 1.6 Nm
-  //this is done on the PC
-
-  ////// DEBUG ////////
-
-//  Serial.print(state[6]); Serial.print(" ");
-//  Serial.print(state[7]); Serial.print(" ");
-//  Serial.print(state[8]); Serial.print(" ");
-//  Serial.print(state[9]); Serial.println(";      ");
-//  Serial.print(delta_quat(0)); Serial.print(" ");
-//  Serial.print(delta_quat(1)); Serial.print(" ");
-//  Serial.print(delta_quat(2)); Serial.print(" ");
-//  Serial.println();
-  
-//  state[0] = 0;
-//  state[1] = 0;
-//  state[2] = 0;
-//  state[3] = 0;
-//  state[4] = 0;
-//  state[5] = 0;
-//  quat_init = quat_t(1,0,0,0);
-//  quat_t rand_quat = quat_t::UnitRandom();
-//  state[6] = rand_quat.w();
-//  state[7] = rand_quat.x();
-//  state[8] = rand_quat.y();
-//  state[9] = rand_quat.z();
-
   vector_3t current; 
   if (initialized) {
     getTorque(state, quat_a, current);  
