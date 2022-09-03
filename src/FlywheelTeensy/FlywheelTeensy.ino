@@ -39,7 +39,7 @@ using quat_t = Eigen::Quaternion<float>;
 //#define kd_rp 1.5
 
 #define kp_y 15.0
-#define kp_rp 50.0
+#define kp_rp 120.0
 #define kd_y 1.0
 #define kd_rp 2.0
 //use volatile if we need to use threading for our robot
