@@ -32,9 +32,16 @@ using matrix_t = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>;
 using matrix_3t = Eigen::Matrix<float, 3, 3>;
 using quat_t = Eigen::Quaternion<float>;
 
+//For rotation about x and y
+//#define kp_y 15.0
+//#define kp_rp 30.0
+//#define kd_y 0.7
+//#define kd_rp 1.5
 
-#define kp 4.0
-#define kd 0.4
+#define kp_y 15.0
+#define kp_rp 50.0
+#define kd_y 1.0
+#define kd_rp 2.0
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
 volatile float dP = 0;
@@ -96,13 +103,15 @@ void setup() {
   // initKoios2
   delay(250);
   koios->STO(1);
-  koios-> waitSwitch(1); //manual switch on robot
+  koios->waitSwitch(1); //manual switch on robot
+//  koios->setSigB(1);
   delay(250);
   rt = koios->motorsOn();
   delay(5000);
   koios->resetStates();
   koios->setLEDs("0100");
   koios->waitSwitch(0);
+//  koios->setSigB(0);
   koios-> setLogo('A');
   delay(5000);
   koios->flashG(2);
@@ -113,7 +122,7 @@ void setup() {
   threads.addThread(imuThread);
   koios->setLEDs("0001");
   koios->setLogo('G');
-//  delay(500);
+  delay(2000);
   Serial7.clear();
 }
 
@@ -250,13 +259,20 @@ void getTorque(float* state, quat_t quat_a, vector_3t &torque) {
     vector_4t quat_d_vec;
     vector_4t quat_a_vec;
 
+// 1-2-3 -- no
     quat_t quat_actuator = quat_t(0.8806, 0.3646, -0.2795, 0.1160);
+// 3-1-2 -- no
+//    quat_t quat_actuator = quat_t(0.3400, 0.4249, 0.1758, 0.8204);
+// 2-3-1 -- no
+//    quat_t quat_actuator = quat_t(0.5405, -0.0607, -0.4558, -0.7053);
+// 3-2-1 -- def no
+//    quat_t quat_actuator = quat_t(0.6847, 0.2106, 0.0878, -0.1092);
     quat_t quat_d = quat_t(1,0,0,0);
     omega_d << 0,0,0;
-    omega_a << state[5], state[4], state[3];
+    omega_a << state[3], state[4], state[5];
 
-    quat_d *= quat_actuator;
-    quat_a *= quat_actuator;
+//    quat_d *= quat_actuator;
+//    quat_a *= quat_actuator;
 
     quat_d_vec << quat_d.w(), quat_d.x(), quat_d.y(), quat_d.z();
     quat_a_vec << quat_a.w(), quat_a.x(), quat_a.y(), quat_a.z();
@@ -267,12 +283,17 @@ void getTorque(float* state, quat_t quat_a, vector_3t &torque) {
     matrix_3t Kp, Kd;
     Kp.setZero();
     Kd.setZero();
-    Kp.diagonal() << kp, kp, kp;
-    Kd.diagonal() << kd, kd, kd;
+    Kp.diagonal() << kp_rp, kp_rp, kp_y;
+    Kd.diagonal() << kd_rp, kd_rp, kd_y;
+
+//    Serial.print(delta_quat(0)); Serial.print(", ");
+//    Serial.print(delta_quat(1)); Serial.print(", ");
+//    Serial.print(delta_quat(2)); Serial.print(", ");
+//    Serial.println();
 
     vector_3t tau;
     delta_omega = -quat_actuator.inverse()._transformVector(omega_a) - omega_d;
-    tau = -Kp * delta_quat - Kd * delta_omega;
+    tau = -quat_actuator.inverse()._transformVector(Kp * delta_quat) - Kd * delta_omega;
 
     torque << tau*torque_to_current;
 }
@@ -286,6 +307,7 @@ void exitProgram() {
     elmo.cmdTC(0.0,IDX_K2);
     elmo.cmdTC(0.0,IDX_K3); 
     koios->motorsOff(0);
+    koios->setSigB(1);
     koios->setLEDs("1000");
     koios->setLogo('R');
     while(1) {};
@@ -315,21 +337,34 @@ void loop() {
   koios->updateStates(x1,v1,x2,v2,x3,v3);
   // Add step to get leg length from Bia here over serial
   state[0] = v1;
-  state[1] = v2;
-  state[2] = v3;
-  state[3] = DY;
+  state[1] = v3;
+  state[2] = v2;
+  state[3] = DR;
   state[4] = DP;
-  state[5] = DR;
+  state[5] = DY;
   state[6] = Q0;
   state[7] = Q1;
   state[8] = Q2;
   state[9] = Q3;
 
-  if (!initialized && (
-  ((state[6] >= 0.01) && (state[6] <= 1)) || 
-  ((state[7] >= 0.01) && (state[7] <= 1)) || 
-  ((state[8] >= 0.01) && (state[8] <= 1)) ||
-  ((state[9] >= 0.01) && (state[9] <= 1))) ) {
+  static int reset_cmd = 0;
+
+  if (Serial.available() > 0) {
+    while (Serial.available() > 0)
+      Serial.read();
+    reset_cmd = 1;
+  };
+
+  vector_4t state_tmp;
+  state_tmp << state[6], state[7], state[8], state[9];
+
+  if (!initialized &&
+  (state_tmp.norm() > 0.95 && state_tmp.norm() < 1.05 )) {
+//       Serial.print(state[6]); Serial.print(", ");
+//       Serial.print(state[7]); Serial.print(", ");
+//       Serial.print(state[8]); Serial.print(", ");
+//       Serial.print(state[9]); Serial.print(", ");
+//       Serial.println();
     quat_init = quat_t(state[9], state[6], state[7], state[8]);
     quat_init_inverse = quat_init.inverse();
     initialized = true;
@@ -444,9 +479,39 @@ void loop() {
     }
   }
 
+  if (reset_cmd) {
+    elmo.cmdTC(-0.1*v1,IDX_K1);
+    elmo.cmdTC(-0.1*v3,IDX_K2);
+    elmo.cmdTC(-0.1*v2,IDX_K3); 
+    if (abs(v1) < 0.01 && abs(v2) < 0.01 && abs(v3) < 0.01) {
+      reset_cmd = 0;
+    }
+  } else {
     elmo.cmdTC(current[0],IDX_K1);
     elmo.cmdTC(current[1],IDX_K2);
     elmo.cmdTC(current[2],IDX_K3); 
+  }
+
+//  elmo.cmdTC(current[0],IDX_K1);
+//    elmo.cmdTC(current[1],IDX_K2);
+//    elmo.cmdTC(current[2],IDX_K3); 
+    
+
+//    elmo.cmdTC(1,IDX_K1);
+//    delay(1000);
+//    elmo.cmdTC(-1,IDX_K1);
+//    delay(1000);
+//    elmo.cmdTC(0,IDX_K1);
+//    elmo.cmdTC(1,IDX_K2);
+//    delay(1000);
+//    elmo.cmdTC(-1,IDX_K2);
+//    delay(1000);
+//    elmo.cmdTC(0,IDX_K2);
+//    elmo.cmdTC(1,IDX_K3);
+//    delay(1000);
+//    elmo.cmdTC(-1,IDX_K3);
+//    delay(1000);
+//    elmo.cmdTC(0,IDX_K3);
 
  // send u4 current command to leg over serial RX/TX between teensy boards
  //  delay(1);
