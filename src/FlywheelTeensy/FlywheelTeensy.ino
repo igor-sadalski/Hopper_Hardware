@@ -104,14 +104,14 @@ void setup() {
   delay(250);
   koios->STO(1);
   koios->waitSwitch(1); //manual switch on robot
-//  koios->setSigB(1);
+  koios->setSigB(1);
   delay(250);
   rt = koios->motorsOn();
   delay(5000);
   koios->resetStates();
   koios->setLEDs("0100");
   koios->waitSwitch(0);
-//  koios->setSigB(0);
+  koios->setSigB(0);
   koios-> setLogo('A');
   delay(5000);
   koios->flashG(2);
@@ -491,11 +491,6 @@ void loop() {
     elmo.cmdTC(current[1],IDX_K2);
     elmo.cmdTC(current[2],IDX_K3); 
   }
-
-//  elmo.cmdTC(current[0],IDX_K1);
-//    elmo.cmdTC(current[1],IDX_K2);
-//    elmo.cmdTC(current[2],IDX_K3); 
-    
 
 //    elmo.cmdTC(1,IDX_K1);
 //    delay(1000);
