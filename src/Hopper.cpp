@@ -25,14 +25,18 @@
 #include "geometry_msgs/TransformStamped.h"
 #include "std_msgs/String.h"
 
+#include <manif/manif.h>
+
 #define MAX 48
 #define STATE_SIZE 40
-#define MSG_SIZE 48+4-2
+#define MSG_SIZE 48+4
 #define PORT 8888
 #define SA struct sockaddr
 
 using namespace Eigen;
 using namespace Hopper_t;
+
+const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");
 
 vector_3t Kp_gains = {1,1,1};
 vector_3t Kd_gains = {0,0,0}; //?
@@ -41,11 +45,17 @@ struct State {
   scalar_t x;
   scalar_t y;
   scalar_t z;
+  scalar_t x_dot;
+  scalar_t y_dot;
+  scalar_t z_dot;
   scalar_t q_w;
   scalar_t q_x;
   scalar_t q_y;
   scalar_t q_z;
-} state;
+  scalar_t w_x;
+  scalar_t w_y;
+  scalar_t w_z;
+} OptiState;
 
 matrix_3t cross(vector_3t q) {
     matrix_3t c;
@@ -53,10 +63,6 @@ matrix_3t cross(vector_3t q) {
             q(2), 0, -q(0),
             -q(1), q(0), 0;
     return c;
-}
-
-void TokenizeStringToFloats(char str[], float state[]){
-    memcpy(state, str, sizeof(str));
 }
 
 void computeTorque(quat_t quat_a, quat_t quat_d, vector_3t omega_a, vector_3t omega_d, vector_3t &torque) {
@@ -91,13 +97,13 @@ void computeTorque(quat_t quat_a, quat_t quat_d, vector_3t omega_a, vector_3t om
 
 void chatterCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-  state.x = msg->pose.position.x;
-  state.y = msg->pose.position.y;
-  state.z = msg->pose.position.z;
-  state.q_w = msg->pose.orientation.w;
-  state.q_x = msg->pose.orientation.x;
-  state.q_y = msg->pose.orientation.y;
-  state.q_z = msg->pose.orientation.z;
+  OptiState.x = msg->pose.position.x;
+  OptiState.y = msg->pose.position.y;
+  OptiState.z = msg->pose.position.z;
+  OptiState.q_w = msg->pose.orientation.w;
+  OptiState.q_x = msg->pose.orientation.x;
+  OptiState.q_y = msg->pose.orientation.y;
+  OptiState.q_z = msg->pose.orientation.z;
 }
 
 void signal_callback_handler(int signum) {
@@ -106,36 +112,68 @@ void signal_callback_handler(int signum) {
    exit(signum);
 }
 
+
+int sockfd, connfd;
+char buff[MSG_SIZE];
+char buffMAX[MSG_SIZE];
+char send_buff[34];
+float states[10]; //states + 1 
+
+vector_t getStateFromESP() {
+  vector_t state_vec(10);
+
+  //receive string states, ESP8266 -> PC
+  char start_msg[2] = {0,0};
+  std::bitset<8> x0(start_msg[0]);
+  std::bitset<8> x1(start_msg[1]);
+  //while ((x0 != 0b11111111) && (x1 != 0b11111111)){
+  //  read(sockfd, start_msg, sizeof(start_msg));
+  //  x0 = std::bitset<8>(start_msg[0]);
+  //  x1 = std::bitset<8>(start_msg[1]);
+  //}
+  //if ((x0 != 0b11111111) && (x1 == 0b11111111)) {
+  //  read(sockfd, start_msg, sizeof(char));
+  //  read(sockfd, buff, sizeof(buff));
+  //}
+  //else if ((x0 == 0b11111111) && (x1 != 0b11111111)) {
+  //  read(sockfd, buff+1, sizeof(buff)-sizeof(char));
+  //  buff[0] = start_msg[1];
+  //} else {
+    read(sockfd, buff, sizeof(buff));
+  //}
+  char oneAdded[6];
+  memcpy(oneAdded, buff+42, 6*sizeof(char));
+  for (int i = 0; i < 6; i++) {
+    for (int j = 1; j < 8; j++) {
+      if(oneAdded[i] & (1 << (8-j))) {
+        buff[i*7+(j-1)+2] = 0;
+      }
+    }
+  }
+  
+  memcpy(&states, buff+2, 10*sizeof(float));
+  state_vec << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9];
+   return state_vec;
+}
+
 int main(int argc, char **argv)
 {
-
-	quat_t quat_d;
-	quat_t quat_a;
-	vector_3t omega_a;
-	vector_3t omega_d;
-	vector_3t torque;
+	quat_t quat_a, quat_d;
+	vector_3t omega_a, omega_d, torque;
 	scalar_t Q_w, Q_x, Q_y, Q_z;
 	scalar_t w_x, w_y, w_z;
-	char buff[MSG_SIZE];
-	char buffMAX[MSG_SIZE];
-	char send_buff[34];
 	//torques to currents, assumes torques is an array of floats
 	scalar_t const_wheels = 0.083;
 	bool init = false;
 	vector_t state_init(10);
-	quat_t quat_init;
-
 
         bool fileWrite = true;
         std::string dataLog = "../data/data.csv";
 	std::ofstream fileHandle;
         fileHandle.open(dataLog);
 
-
         // socket stuff
-	int sockfd, connfd;
 	struct sockaddr_in servaddr, cli;
-	float states[10]; //states + 1 
 	vector_t state_vec(10); //states + 1 
 
 	// socket create and verification
@@ -161,179 +199,101 @@ int main(int argc, char **argv)
 	else
 		printf("connected to the server..\n");
 	sleep(1);
-	//read(sockfd, buff, 32); // Weird thing to clear the buffer
-
-
-	////cannot use spaces or special characters in the string message as the program otherwise freaks out
-	
 	   
         std::chrono::high_resolution_clock::time_point t1;
         std::chrono::high_resolution_clock::time_point t2;
         std::chrono::high_resolution_clock::time_point tstart;
         tstart = std::chrono::high_resolution_clock::now();
 
-	//ros::init(argc, argv, "listener");
-	//ros::NodeHandle n;
-	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
-
 	signal(SIGINT, signal_callback_handler);
 
-	//ros::init(argc, argv, "listener");
-	//ros::NodeHandle n;
-	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
-	while(1){
-		//ros::spinOnce();
-		t1 = std::chrono::high_resolution_clock::now();
-		//read(sockfd, buffMAX, sizeof(buffMAX));
-		//bzero(buff, sizeof(buff));
-		//std::cout << "Message: " << std::endl;
-		//for (int i = 0; i < MSG_SIZE; i++) {
-		//	std::bitset<8> x(buffMAX[i]);
-		//	std::cout << x << " ";
-		//}
-		
-		
+	ros::init(argc, argv, "listener");
+	ros::NodeHandle n;
+	ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
+	while(ros::ok()){
+          ros::spinOnce();
+	//while(1) {
+          t1 = std::chrono::high_resolution_clock::now();
+          
+          state_vec = getStateFromESP();
+          std::cout <<"Global state: " << OptiState.x << ", " << OptiState.y << ", " << OptiState.z <<std::endl;
+          //t2 = std::chrono::high_resolution_clock::now();
+          //std::cout <<"ESP Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
+          
+          // ROS stuff
+          if (!init) {
+            state_init = state_vec;
+            init = true;
+          }
+          
+          std::cout << "state: " << state_vec.transpose().format(CSVFormat) << std::endl;
+          w_x = state_vec[3];
+          w_y = state_vec[4];
+          w_z = state_vec[5];				
+          Q_w = state_vec[6];
+          Q_x = state_vec[7];
+          Q_y = state_vec[8];
+          Q_z = state_vec[9];	
+          quat_d = Quaternion<scalar_t>(1,0,0,0);
+          quat_a = Quaternion<scalar_t>(Q_w,Q_x,Q_y,Q_z);
+          omega_d << 0,0,0; 
+          omega_a << w_x, w_y, w_z;
 
-		//receive string states, ESP8266 -> PC
-		char start_msg[2] = {0,0};
-		std::bitset<8> x0(start_msg[0]);
-		std::bitset<8> x1(start_msg[1]);
-		while ((x0 != 0b11111111) && (x1 != 0b11111111)){
-		  read(sockfd, start_msg, sizeof(start_msg));
-		  x0 = std::bitset<8>(start_msg[0]);
-		  x1 = std::bitset<8>(start_msg[1]);
-		  //std::cout << (x0 != 0b11111111) << ", " << (x1 != 0b11111111) << "," <<((x0 != 0b11111111) && (x1 != 0b11111111)) << std::endl;
-		  //std::cout << x0 << "," << x1 << std::endl;
+	  vector_t state(21);
+
+          
+          //computeTorque(quat_a, quat_d, omega_a, omega_d, torque);
+          //torque << 0,0,10.1234;
+          //bzero(send_buff, sizeof(send_buff));
+          ////sprintf(send_buff,"<{%.4f,%.4f,%.4f}>",torque(0)/const_wheels, torque(1)/const_wheels, torque(2))/const_wheels;	
+	  //
+	  
+	  manif::SO3Tangent<scalar_t> delta_theta; 
+	  delta_theta << 0,0,0*std::chrono::duration_cast<std::chrono::milliseconds>(t2-tstart).count()*1e-3;
+	  quat_d = delta_theta.exp().quat();
+
+          scalar_t qd_w = quat_d.w();
+          scalar_t qd_x = quat_d.x();
+          scalar_t qd_y = quat_d.y();
+          scalar_t qd_z = quat_d.z();
+          scalar_t wd_x = 0;
+          scalar_t wd_y = 0;
+          scalar_t wd_z = 0;
+          
+          float d_state[7];
+          d_state[0] = qd_w;
+          d_state[1] = qd_x;
+          d_state[2] = qd_y;
+          d_state[3] = qd_z;
+          d_state[4] = wd_x;
+          d_state[5] = wd_y;
+          d_state[6] = wd_z;
+          
+          // encode send_buff
+          send_buff[0] = 0b11111111;
+          send_buff[1] = 0b11111111;
+          memcpy(send_buff+2, d_state, 7*4);
+          for (int i = 0; i < 4; i++) {
+              char oneAdded = 0b00000001;
+              for (int j = 1; j < 8; j++){
+                if (send_buff[i*7+(j-1)+2] == 0b00000000) {
+                  send_buff[i*7+(j-1)+2] = 0b00000001;
+                  oneAdded += (1 << (8-j));
                 }
-		if ((x0 != 0b11111111) && (x1 == 0b11111111)) {
-		  read(sockfd, start_msg, sizeof(char));
-		  read(sockfd, buff, sizeof(buff));
-		}
-		else if ((x0 == 0b11111111) && (x1 != 0b11111111)) {
-		  read(sockfd, buff+1, sizeof(buff)-sizeof(char));
-		  buff[0] = start_msg[1];
-		} else {
-		  read(sockfd, buff, sizeof(buff));
-		}
-		//std::cout << x0 << ", " << x1 << std::endl;
-		//printf("%s \n", buff);	
-		char oneAdded[6];
-		memcpy(oneAdded, buff+40, 6*sizeof(char));
-		//std::cout << "Message: " << std::endl;
-		//for (int i = 0; i < 40; i++) {
-		//	std::bitset<8> x(buff[i]);
-		//	std::cout << x << " ";
-		//}
-		//std::cout << std::endl;
-		//std::cout << "One added: " << std::endl;
-		//for (int i = 0; i < 6; i++) {
-		//	std::bitset<8> x(oneAdded[i]);
-		//	std::cout << x << " ";
-		//}
-		//std::cout << std::endl;
-		for (int i = 0; i < 6; i++) {
-	          for (int j = 1; j < 8; j++) {
-	            if(oneAdded[i] & (1 << (8-j))) {
- 	              buff[i*7+(j-1)] = 0;
-	            }
-	          }
-		}
-
-		float tmp[10];
-		memcpy(&tmp, buff, 10*sizeof(float));
-		std::cout << "Message: ";
-		for (int i = 0; i < 10; i++) {
-     	          std::cout << tmp[i] << ", ";
-		}
-		std::cout << std::endl;
-		std::cout <<"Global state: " << state.x << ", " << state.y << ", " << state.z <<std::endl;
-
-
-		// ROS stuff
-		
-		//assume tokenization on ,
-		TokenizeStringToFloats(buff, states);
-		if (!init) {
-		  state_init << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9]; // save the initial condition
-		  quat_init = Quaternion<scalar_t>(states[6], states[7], states[8], states[9]);
-		  init = true;
-		}
-		state_vec.setZero();
-		state_vec << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9];
-
-		std::cout <<"Global state: " << state.x << ", " << state.y << ", " << state.z <<std::endl;
-		
-		//std::cout << "state: " << state_vec.transpose() << std::endl;
-		//w_x = states[3];
-		//w_y = states[4];
-		//w_z = states[5];				
-		//Q_w = states[6];
-		//Q_x = states[7];
-		//Q_y = states[8];
-		//Q_z = states[9];	
-		//quat_d = Quaternion<scalar_t>(1,0,0,0);
-		//quat_a = Quaternion<scalar_t>(Q_w,Q_x,Q_y,Q_z);
-		//quat_a = quat_init.inverse()*quat_a;
-		//omega_d << 0,0,0; 
-		//omega_a << w_x, w_y, w_z;
-		//computeTorque(quat_a, quat_d, omega_a, omega_d, torque);
-		//torque << 0,0,10.1234;
-		//bzero(send_buff, sizeof(send_buff));
-		////sprintf(send_buff,"<{%.4f,%.4f,%.4f}>",torque(0)/const_wheels, torque(1)/const_wheels, torque(2))/const_wheels;	
-		scalar_t qd_w = 1.0;
-		scalar_t qd_x = 2.0;
-		scalar_t qd_y = 3.0;
-		scalar_t qd_z = 4.0;
-		scalar_t wd_x = 1.0;
-		scalar_t wd_y = 2.0;
-		scalar_t wd_z = 3.0;
-		float d_state[7];
-		d_state[0] = qd_w;
-		d_state[1] = qd_x;
-		d_state[2] = qd_y;
-		d_state[3] = qd_z;
-		d_state[4] = wd_x;
-		d_state[5] = wd_y;
-		d_state[6] = wd_z;
-		//sprintf(send_buff,"<{%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f}>",qd_w, qd_x, qd_y, qd_z, wd_x, wd_y, wd_z);	
-		//std::cout << "torque: " << send_buff << std::endl;
-		//
-		//
-		// encode send_buff
-		send_buff[0] = 0b11111111;
-                send_buff[1] = 0b11111111;
-                memcpy(send_buff+2, d_state, 7*4);
-
-                 for (int i = 0; i < 4; i++) {
-                     char oneAdded = 0b00000001;
-                     for (int j = 1; j < 8; j++){
-                       if (send_buff[i*7+(j-1)+2] == 0b00000000) {
-                         send_buff[i*7+(j-1)+2] = 0b00000001;
-                         oneAdded += (1 << (8-j));
-                       }
-                     }
-                     memcpy(&send_buff[28+i+2], &oneAdded, 1);
-                 }
-		
-		write(sockfd, send_buff, sizeof(send_buff));		
-		//usleep(20000);
-		//read(sockfd, start_msg, sizeof(start_msg));
-		//x0 = std::bitset<8>(start_msg[0]);
-                //  x1 = std::bitset<8>(start_msg[1]);
-                //  //std::cout << (x0 != 0b11111111) << ", " << (x1 != 0b11111111) << "," <<((x0 != 0b11111111) && (x1 != 0b11111111)) << std::endl;
-                //  std::cout << x0 << "," << x1 << std::endl;
-		//read(sockfd, start_msg, sizeof(start_msg));
-		//x0 = std::bitset<8>(start_msg[0]);
-                //  x1 = std::bitset<8>(start_msg[1]);
-                //  //std::cout << (x0 != 0b11111111) << ", " << (x1 != 0b11111111) << "," <<((x0 != 0b11111111) && (x1 != 0b11111111)) << std::endl;
-                //  std::cout << x0 << "," << x1 << std::endl;
-		t2 = std::chrono::high_resolution_clock::now();
-                std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
-
-                if (fileWrite)
-                  fileHandle << std::chrono::duration_cast<std::chrono::nanoseconds>(t2-tstart).count()*1e-9 << "," << state.x << "," << state.y << "," << state.z << "," << state.q_w<< "," << state.q_x << "," << state.q_y << "," << state.q_z << "," << tmp[0] << "," << tmp[1] << "," << tmp[2] << "," << tmp[3] << "," << tmp[4] << "," << tmp[5] << "," << tmp[6] << "," << tmp[7] << "," << tmp[8] << "," << tmp[9]<<std::endl;
+              }
+              memcpy(&send_buff[28+i+2], &oneAdded, 1);
+          }
+          
+          write(sockfd, send_buff, sizeof(send_buff));		
+          
+          t2 = std::chrono::high_resolution_clock::now();
+          std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
+          
+          if (fileWrite)
+            fileHandle << std::chrono::duration_cast<std::chrono::nanoseconds>(t2-tstart).count()*1e-9 << "," << OptiState.x << "," << OptiState.y << "," << OptiState.z << "," << OptiState.q_w<< "," << OptiState.q_x << "," << OptiState.q_y << "," << OptiState.q_z << "," << state_vec.transpose().format(CSVFormat)<<std::endl;
 	}
 	close(sockfd);
 }
 
 //roslaunch vrpn_client_ros fast.launch server:=192.168.1.5
+//ifconfig enx5c857e36c21a 169.254.10.80
