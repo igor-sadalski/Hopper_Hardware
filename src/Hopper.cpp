@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <signal.h>
 #include <bitset>
+#include<thread>
 
 #include "../inc/Types.h"
 
@@ -119,28 +120,20 @@ char buffMAX[MSG_SIZE];
 char send_buff[34];
 float states[10]; //states + 1 
 
-vector_t getStateFromESP() {
+vector_t state(10);
+float desstate[7];
+std::mutex state_mtx;
+std::mutex des_state_mtx;
+
+void getStateFromESP() {
+  while(1) {
   vector_t state_vec(10);
 
   //receive string states, ESP8266 -> PC
   char start_msg[2] = {0,0};
   std::bitset<8> x0(start_msg[0]);
   std::bitset<8> x1(start_msg[1]);
-  //while ((x0 != 0b11111111) && (x1 != 0b11111111)){
-  //  read(sockfd, start_msg, sizeof(start_msg));
-  //  x0 = std::bitset<8>(start_msg[0]);
-  //  x1 = std::bitset<8>(start_msg[1]);
-  //}
-  //if ((x0 != 0b11111111) && (x1 == 0b11111111)) {
-  //  read(sockfd, start_msg, sizeof(char));
-  //  read(sockfd, buff, sizeof(buff));
-  //}
-  //else if ((x0 == 0b11111111) && (x1 != 0b11111111)) {
-  //  read(sockfd, buff+1, sizeof(buff)-sizeof(char));
-  //  buff[0] = start_msg[1];
-  //} else {
-    read(sockfd, buff, sizeof(buff));
-  //}
+  read(sockfd, buff, sizeof(buff));
   char oneAdded[6];
   memcpy(oneAdded, buff+42, 6*sizeof(char));
   for (int i = 0; i < 6; i++) {
@@ -152,8 +145,31 @@ vector_t getStateFromESP() {
   }
   
   memcpy(&states, buff+2, 10*sizeof(float));
-  state_vec << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9];
-   return state_vec;
+  {std::lock_guard<std::mutex> lck(state_mtx);
+  state << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9];
+  }
+ 
+  // encode send_buff
+  send_buff[0] = 0b11111111;
+  send_buff[1] = 0b11111111;
+  {std::lock_guard<std::mutex> lck(des_state_mtx);
+  memcpy(send_buff+2, desstate, 7*4);
+  }
+  for (int i = 0; i < 4; i++) {
+      char oneAdded = 0b00000001;
+      for (int j = 1; j < 8; j++){
+        if (send_buff[i*7+(j-1)+2] == 0b00000000) {
+          send_buff[i*7+(j-1)+2] = 0b00000001;
+          oneAdded += (1 << (8-j));
+        }
+      }
+      memcpy(&send_buff[28+i+2], &oneAdded, 1);
+  }
+  
+  write(sockfd, send_buff, sizeof(send_buff));		
+  }
+
+  //return state_vec;
 }
 
 int main(int argc, char **argv)
@@ -166,6 +182,7 @@ int main(int argc, char **argv)
 	scalar_t const_wheels = 0.083;
 	bool init = false;
 	vector_t state_init(10);
+	state.setZero();
 
         bool fileWrite = true;
         std::string dataLog = "../data/data.csv";
@@ -207,6 +224,16 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, signal_callback_handler);
 
+	desstate[0] = 1;
+        desstate[1] = 0;
+        desstate[2] = 0;
+        desstate[3] = 0;
+        desstate[4] = 0;
+        desstate[5] = 0;
+        desstate[6] = 0;
+
+	std::thread thread_object(getStateFromESP);
+
 	//ros::init(argc, argv, "listener");
 	//ros::NodeHandle n;
 	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
@@ -215,7 +242,11 @@ int main(int argc, char **argv)
 	while(1) {
           t1 = std::chrono::high_resolution_clock::now();
           
-          state_vec = getStateFromESP();
+          //state_vec = getStateFromESP();
+	  { std::lock_guard<std::mutex> lck(state_mtx);
+	    state_vec = state;
+	  }
+
           std::cout <<"Global state: " << OptiState.x << ", " << OptiState.y << ", " << OptiState.z <<std::endl;
           //t2 = std::chrono::high_resolution_clock::now();
           //std::cout <<"ESP Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
@@ -260,37 +291,23 @@ int main(int argc, char **argv)
           scalar_t wd_y = 0;
           scalar_t wd_z = 0;
           
-          float d_state[7];
-          d_state[0] = qd_w;
-          d_state[1] = qd_x;
-          d_state[2] = qd_y;
-          d_state[3] = qd_z;
-          d_state[4] = wd_x;
-          d_state[5] = wd_y;
-          d_state[6] = wd_z;
-          
-          // encode send_buff
-          send_buff[0] = 0b11111111;
-          send_buff[1] = 0b11111111;
-          memcpy(send_buff+2, d_state, 7*4);
-          for (int i = 0; i < 4; i++) {
-              char oneAdded = 0b00000001;
-              for (int j = 1; j < 8; j++){
-                if (send_buff[i*7+(j-1)+2] == 0b00000000) {
-                  send_buff[i*7+(j-1)+2] = 0b00000001;
-                  oneAdded += (1 << (8-j));
-                }
-              }
-              memcpy(&send_buff[28+i+2], &oneAdded, 1);
-          }
-          
-          write(sockfd, send_buff, sizeof(send_buff));		
-          
-          t2 = std::chrono::high_resolution_clock::now();
+	  { std::lock_guard<std::mutex> lck(des_state_mtx);
+          desstate[0] = qd_w;
+          desstate[1] = qd_x;
+          desstate[2] = qd_y;
+          desstate[3] = qd_z;
+          desstate[4] = wd_x;
+          desstate[5] = wd_y;
+          desstate[6] = wd_z;
+	  }
+
+                   t2 = std::chrono::high_resolution_clock::now();
           std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
           
           if (fileWrite)
             fileHandle << std::chrono::duration_cast<std::chrono::nanoseconds>(t2-tstart).count()*1e-9 << "," << OptiState.x << "," << OptiState.y << "," << OptiState.z << "," << OptiState.q_w<< "," << OptiState.q_x << "," << OptiState.q_y << "," << OptiState.q_z << "," << state_vec.transpose().format(CSVFormat)<<std::endl;
+
+	  std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	close(sockfd);
 }
