@@ -66,36 +66,6 @@ matrix_3t cross(vector_3t q) {
     return c;
 }
 
-void computeTorque(quat_t quat_a, quat_t quat_d, vector_3t omega_a, vector_3t omega_d, vector_3t &torque) {
-    
-    vector_3t delta_omega;
-    vector_4t quat_d_vec;
-    vector_4t quat_a_vec;
-    
-    quat_t quat_actuator = quat_t(0.8806, 0.3646, -0.2795, 0.1160);
-
-    quat_d *= quat_actuator;
-    quat_a *= quat_actuator;
-
-    quat_d_vec << quat_d.w(), quat_d.x(), quat_d.y(), quat_d.z();
-    quat_a_vec << quat_a.w(), quat_a.x(), quat_a.y(), quat_a.z();
-
-    vector_3t delta_quat;
-    delta_quat << quat_a_vec[0] * quat_d_vec.segment(1, 3) - quat_d_vec[0] * quat_a_vec.segment(1, 3) -
-                  cross(quat_a_vec.segment(1, 3)) * quat_d_vec.segment(1, 3);
-    matrix_3t Kp, Kd;
-    Kp.setZero();
-    Kd.setZero();
-    Kp.diagonal() << Kp_gains;
-    Kd.diagonal() << Kd_gains;
-
-    vector_3t tau;
-    delta_omega = -quat_actuator.inverse()._transformVector(omega_a) - omega_d;
-    tau = -Kp * delta_quat - Kd * delta_omega;
-
-    torque << tau;
-};
-
 void chatterCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
   OptiState.x = msg->pose.position.x;
@@ -118,7 +88,7 @@ int sockfd, connfd;
 char buff[MSG_SIZE];
 char buffMAX[MSG_SIZE];
 char send_buff[34];
-float states[10]; //states + 1 
+float states[10];
 
 vector_t state(10);
 float desstate[7];
@@ -172,6 +142,35 @@ void getStateFromESP() {
   //return state_vec;
 }
 
+void setupSocket() {
+        // socket stuff
+        struct sockaddr_in servaddr, cli;
+
+        // socket create and verification
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd == -1) {
+                printf("socket creation failed...\n");
+                exit(0);
+        }
+        else
+                printf("Socket successfully created..\n");
+        bzero(&servaddr, sizeof(servaddr));
+
+        // assign IP, PORT
+        servaddr.sin_family = AF_INET;
+        servaddr.sin_addr.s_addr = inet_addr("192.168.1.4");
+        servaddr.sin_port = htons(PORT);
+
+        // connect the client socket to server socket
+        if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
+                printf("connection with the server failed...\n");
+                exit(0);
+        }
+        else
+                printf("connected to the server..\n");
+        sleep(1);
+}
+
 int main(int argc, char **argv)
 {
 	quat_t quat_a, quat_d;
@@ -183,46 +182,21 @@ int main(int argc, char **argv)
 	bool init = false;
 	vector_t state_init(10);
 	state.setZero();
+        vector_t state_vec(10); //states + 1
 
         bool fileWrite = true;
         std::string dataLog = "../data/data.csv";
 	std::ofstream fileHandle;
         fileHandle.open(dataLog);
 
-        // socket stuff
-	struct sockaddr_in servaddr, cli;
-	vector_t state_vec(10); //states + 1 
-
-	// socket create and verification
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd == -1) {
-		printf("socket creation failed...\n");
-		exit(0);
-	}
-	else
-		printf("Socket successfully created..\n");
-	bzero(&servaddr, sizeof(servaddr));
-
-	// assign IP, PORT
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = inet_addr("192.168.1.4"); 
-	servaddr.sin_port = htons(PORT);
-
-	// connect the client socket to server socket
-	if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
-		printf("connection with the server failed...\n");
-		exit(0);
-	}
-	else
-		printf("connected to the server..\n");
-	sleep(1);
-	   
         std::chrono::high_resolution_clock::time_point t1;
         std::chrono::high_resolution_clock::time_point t2;
         std::chrono::high_resolution_clock::time_point tstart;
         tstart = std::chrono::high_resolution_clock::now();
 
 	signal(SIGINT, signal_callback_handler);
+
+	setupSocket();
 
 	desstate[0] = 1;
         desstate[1] = 0;
@@ -234,6 +208,7 @@ int main(int argc, char **argv)
 
 	std::thread thread_object(getStateFromESP);
 
+        // ROS stuff
 	//ros::init(argc, argv, "listener");
 	//ros::NodeHandle n;
 	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
@@ -242,16 +217,12 @@ int main(int argc, char **argv)
 	while(1) {
           t1 = std::chrono::high_resolution_clock::now();
           
-          //state_vec = getStateFromESP();
 	  { std::lock_guard<std::mutex> lck(state_mtx);
 	    state_vec = state;
 	  }
 
           std::cout <<"Global state: " << OptiState.x << ", " << OptiState.y << ", " << OptiState.z <<std::endl;
-          //t2 = std::chrono::high_resolution_clock::now();
-          //std::cout <<"ESP Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
           
-          // ROS stuff
           if (!init) {
             state_init = state_vec;
             init = true;
@@ -272,13 +243,6 @@ int main(int argc, char **argv)
 
 	  vector_t state(21);
 
-          
-          //computeTorque(quat_a, quat_d, omega_a, omega_d, torque);
-          //torque << 0,0,10.1234;
-          //bzero(send_buff, sizeof(send_buff));
-          ////sprintf(send_buff,"<{%.4f,%.4f,%.4f}>",torque(0)/const_wheels, torque(1)/const_wheels, torque(2))/const_wheels;	
-	  //
-	  
 	  manif::SO3Tangent<scalar_t> delta_theta; 
 	  delta_theta << 0,0,0*std::chrono::duration_cast<std::chrono::milliseconds>(t2-tstart).count()*1e-3;
 	  quat_d = delta_theta.exp().quat();
@@ -301,7 +265,7 @@ int main(int argc, char **argv)
           desstate[6] = wd_z;
 	  }
 
-                   t2 = std::chrono::high_resolution_clock::now();
+          t2 = std::chrono::high_resolution_clock::now();
           std::cout <<"Timing: "<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count()*1e-6 << "[ms]" << "\n";
           
           if (fileWrite)
