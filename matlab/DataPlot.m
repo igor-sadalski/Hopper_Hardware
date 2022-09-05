@@ -11,6 +11,15 @@ wheel_vel = A(2:end,ind:ind+2);     ind=ind+3;
 omega = A(2:end,ind:ind+2);         ind=ind+3;
 quat_teensy = A(2:end,ind:ind+3);   ind=ind+4;
 
+% buff_size = 10;
+% buff = zeros(buff_size,1);
+% for i = buff_size:length(t)
+%     buff = pos((i-buff_size+1):i,:);
+%     filt_pos(i,:) = mean(buff);
+% end
+
+filt_pos = sgolayfilt(pos,5,11);
+
 
 %%
 clf

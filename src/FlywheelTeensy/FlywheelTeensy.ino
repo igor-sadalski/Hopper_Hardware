@@ -24,7 +24,7 @@ float x_d[7];
 #define MAX_CURRENT 12  //  15
 #define MIN_CURRENT -12 // -15
 
-#define TIMEOUT_INTERVAL 100 // ms to timeout
+#define TIMEOUT_INTERVAL 1000 // ms to timeout
 
 using vector_3t = Eigen::Matrix<float, 3, 1>;
 using vector_4t = Eigen::Matrix<float, 4, 1>;
@@ -79,6 +79,11 @@ float state[10];
 char additional_read_buffer[3000]; //this values are out of nowhere
 char additional_write_buffer[3000];
 
+
+unsigned long last_ESP_message;
+unsigned long current_ESP_message;
+char receivedCharsESP[34];
+
 //=================SETUP=============
 
 bool exit_state = false;
@@ -96,7 +101,7 @@ void setup() {
   pinMode(LED_BUILTIN,OUTPUT);
   digitalWrite(LED_BUILTIN,HIGH);
 
-  //================Koios=============
+//  //================Koios=============
   koios = new Koios(tENC, elmo);
   koios->initKoios1(1);
 
@@ -104,26 +109,26 @@ void setup() {
   delay(250);
   koios->STO(1);
   koios->waitSwitch(1); //manual switch on robot
-  koios->setSigB(1);
+//  koios->setSigB(1);
   delay(250);
   rt = koios->motorsOn();
   delay(5000);
   koios->resetStates();
   koios->setLEDs("0100");
   koios->waitSwitch(0);
-  koios->setSigB(0);
+//  koios->setSigB(0);
   koios-> setLogo('A');
   delay(5000);
   koios->flashG(2);
   delay(5000);
 
-  
   rt = threads.setSliceMicros(50);
   threads.addThread(imuThread);
   koios->setLEDs("0001");
-  koios->setLogo('G');
   delay(2000);
   Serial7.clear();
+  koios->setLogo('R');
+  threads.addThread(ESPthread);
 }
 
 //============FUNCTIONS==========
@@ -132,6 +137,62 @@ void delayLoop(uint32_t T1, uint32_t L){
   if((T2-T1)<L){
     uint32_t a = L + T1 - T2;
     threads.delay_us(a);
+  }
+}
+
+volatile bool ESP_connected = false;
+
+//std::mutex serial_mtx;
+
+void ESPthread() {
+  while(1){
+
+    char receivedCharsTeensy[10*sizeof(float)+8+1];
+    receivedCharsTeensy[0] = 0b11111111;
+    receivedCharsTeensy[1] = 0b11111111;
+    memcpy(receivedCharsTeensy+2, state, 40);
+     
+    for (int i = 0; i < 6; i++) {
+        byte oneAdded = 0b00000001;
+        for (int j = 1; j < 8; j++){
+          if (receivedCharsTeensy[i*7+(j-1)+2] == 0b00000000) {
+            receivedCharsTeensy[i*7+(j-1)+2] = 0b00000001;
+            oneAdded += (1 << (8-j));
+          }
+        }
+        memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
+    }
+    receivedCharsTeensy[48] = 0b0;
+  
+  //  {std::lock_guard<std::mutex> lck(serial_mtx);
+    Serial7.print(receivedCharsTeensy);
+//    Serial7.flush();
+  //  }
+   
+    int index = 0;
+    while(index < 34) {
+  //    std::lock_guard<std::mutex> lck(serial_mtx);
+      if (Serial7.available() > 0) {
+        receivedCharsESP[index] = Serial7.read();
+        index++;
+      }
+      if (time_initialized) {
+        current_ESP_message = millis();
+        if (current_ESP_message - last_ESP_message > TIMEOUT_INTERVAL) {
+          exitProgram();
+        }
+      }
+    }
+
+    ESP_connected = true;
+  
+    if (!time_initialized) {
+      last_ESP_message = millis();
+      time_initialized = true;
+    } else {
+      last_ESP_message = current_ESP_message;
+    }
+//    threads.delay_us(1000);
   }
 }
 
@@ -247,12 +308,10 @@ matrix_3t cross(vector_3t q) {
     return c;
 }
 
-unsigned long last_ESP_message;
-unsigned long current_ESP_message;
 char oneAdded[4];
 quat_t quat_a;
 
-void getTorque(float* state, quat_t quat_a, vector_3t &torque) {
+void getTorque(float* state, quat_t quat_d, quat_t quat_a, vector_3t &torque) {
     vector_3t delta_omega;
     vector_3t omega_a;
     vector_3t omega_d;
@@ -267,7 +326,7 @@ void getTorque(float* state, quat_t quat_a, vector_3t &torque) {
 //    quat_t quat_actuator = quat_t(0.5405, -0.0607, -0.4558, -0.7053);
 // 3-2-1 -- def no
 //    quat_t quat_actuator = quat_t(0.6847, 0.2106, 0.0878, -0.1092);
-    quat_t quat_d = quat_t(1,0,0,0);
+//    quat_t quat_d = quat_t(1,0,0,0);
     omega_d << 0,0,0;
     omega_a << state[3], state[4], state[5];
 
@@ -299,8 +358,6 @@ void getTorque(float* state, quat_t quat_a, vector_3t &torque) {
 }
 
 //==========================LOOP=============
-  char receivedCharsESP[34];
-  char receivedCharsTeensy[10*sizeof(float)+8+1];
 
 void exitProgram() {
     elmo.cmdTC(0.0,IDX_K1);
@@ -314,6 +371,7 @@ void exitProgram() {
 }
 
 void loop() {
+//  uint32_t Tc0 = micros();
   static float Q0 = 0;
   static float Q1 = 0;
   static float Q2 = 0;
@@ -347,6 +405,17 @@ void loop() {
   state[8] = Q2;
   state[9] = Q3;
 
+//  state[0] = 0;
+//  state[1] = 1;
+//  state[2] = 2;
+//  state[3] = 3;
+//  state[4] = 4;
+//  state[5] = 5;
+//  state[6] = 1;
+//  state[7] = 0;
+//  state[8] = 0;
+//  state[9] = 0;
+
   static int reset_cmd = 0;
 
   if (Serial.available() > 0) {
@@ -356,19 +425,44 @@ void loop() {
   };
 
   vector_4t state_tmp;
-  state_tmp << state[6], state[7], state[8], state[9];
 
-  if (!initialized &&
-  (state_tmp.norm() > 0.95 && state_tmp.norm() < 1.05 )) {
-//       Serial.print(state[6]); Serial.print(", ");
-//       Serial.print(state[7]); Serial.print(", ");
-//       Serial.print(state[8]); Serial.print(", ");
-//       Serial.print(state[9]); Serial.print(", ");
-//       Serial.println();
-    quat_init = quat_t(state[9], state[6], state[7], state[8]);
-    quat_init_inverse = quat_init.inverse();
-    initialized = true;
-  } 
+  while(!initialized) {
+    rt = koios->checkFrame(q0,q1,q2,q3,dY,dP,dR);
+    //based on imu upadate states
+    if(rt==1){
+      Q0 = q0;
+      Q1 = q1;
+      Q2 = q2;
+      Q3 = q3;
+      DY = dY;
+      DP = dP;
+      DR = dR;
+    }
+    koios->updateStates(x1,v1,x2,v2,x3,v3);
+    // Add step to get leg length from Bia here over serial
+    state[0] = v1;
+    state[1] = v3;
+    state[2] = v2;
+    state[3] = DR;
+    state[4] = DP;
+    state[5] = DY;
+    state[6] = Q0;
+    state[7] = Q1;
+    state[8] = Q2;
+    state[9] = Q3;
+    state_tmp << state[9], state[6], state[7], state[8];
+    if (state_tmp.norm() > 0.95 && state_tmp.norm() < 1.05) {
+         Serial.print(state[9]); Serial.print(", ");
+         Serial.print(state[6]); Serial.print(", ");
+         Serial.print(state[7]); Serial.print(", ");
+         Serial.print(state[8]); Serial.print(", ");
+         Serial.println();
+      quat_init = quat_t(state[9], state[6], state[7], state[8]);
+      quat_init_inverse = quat_init.inverse();
+      initialized = true;
+      koios->setLogo('G');
+    } 
+  }
 
   if (initialized) {
     quat_a = quat_t(state[9], state[6], state[7], state[8]); // assuming q_w is last.
@@ -380,47 +474,53 @@ void loop() {
     state[9] = quat_a.z();
   }
 
-  receivedCharsTeensy[0] = 0b11111111;
-  receivedCharsTeensy[1] = 0b11111111;
-  memcpy(receivedCharsTeensy+2, state, 40);
-   
-  for (int i = 0; i < 6; i++) {
-      byte oneAdded = 0b00000001;
-      for (int j = 1; j < 8; j++){
-        if (receivedCharsTeensy[i*7+(j-1)+2] == 0b00000000) {
-          receivedCharsTeensy[i*7+(j-1)+2] = 0b00000001;
-          oneAdded += (1 << (8-j));
-        }
-      }
-      memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
-  }
-  receivedCharsTeensy[48] = 0b0;
-   
-  Serial7.print(receivedCharsTeensy);
-  Serial7.flush();
+  while(!ESP_connected) {}
 
-    
-  
-  int index = 0;
-  while(index < 34) {
-    if (Serial7.available() > 0) {
-      receivedCharsESP[index] = Serial7.read();
-      index++;
-    }
-    if (time_initialized) {
-      current_ESP_message = millis();
-      if (current_ESP_message - last_ESP_message > TIMEOUT_INTERVAL) {
-        exitProgram();
-      }
-    }
-  }
+//  ESPthread();
 
-  if (!time_initialized) {
-    last_ESP_message = millis();
-    time_initialized = true;
-  } else {
-    last_ESP_message = current_ESP_message;
-  }
+// char receivedCharsTeensy[10*sizeof(float)+8+1];
+//  receivedCharsTeensy[0] = 0b11111111;
+//  receivedCharsTeensy[1] = 0b11111111;
+//  memcpy(receivedCharsTeensy+2, state, 40);
+//   
+//  for (int i = 0; i < 6; i++) {
+//      byte oneAdded = 0b00000001;
+//      for (int j = 1; j < 8; j++){
+//        if (receivedCharsTeensy[i*7+(j-1)+2] == 0b00000000) {
+//          receivedCharsTeensy[i*7+(j-1)+2] = 0b00000001;
+//          oneAdded += (1 << (8-j));
+//        }
+//      }
+//      memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
+//  }
+//  receivedCharsTeensy[48] = 0b0;
+//
+////  {std::lock_guard<std::mutex> lck(serial_mtx);
+//  Serial7.print(receivedCharsTeensy);
+//  Serial7.flush();
+////  }
+// 
+//  int index = 0;
+//  while(index < 34) {
+////    std::lock_guard<std::mutex> lck(serial_mtx);
+//    if (Serial7.available() > 0) {
+//      receivedCharsESP[index] = Serial7.read();
+//      index++;
+//    }
+//    if (time_initialized) {
+//      current_ESP_message = millis();
+//      if (current_ESP_message - last_ESP_message > TIMEOUT_INTERVAL) {
+//        exitProgram();
+//      }
+//    }
+//  }
+//
+//  if (!time_initialized) {
+//    last_ESP_message = millis();
+//    time_initialized = true;
+//  } else {
+//    last_ESP_message = current_ESP_message;
+//  }
 
   ///////////////////Print Binary////////////////////
   //  for (int i = 0; i < 34; i++) {
@@ -442,33 +542,28 @@ void loop() {
   memcpy(state_d, receivedCharsESP+2, 7*4);
 
   //////////////// Print the desired state ////////////////////////////
-  //     Serial.print(state_d[0]); Serial.print(", ");
-  //     Serial.print(state_d[1]); Serial.print(", ");
-  //     Serial.print(state_d[2]); Serial.print(", ");
-  //     Serial.print(state_d[3]); Serial.print(", ");
-  //     Serial.print(state_d[4]); Serial.print(", ");
-  //     Serial.print(state_d[5]); Serial.print(", ");
-  //     Serial.print(state_d[6]);
-  //     Serial.println();
+//       Serial.print(state_d[0]); Serial.print(", ");
+//       Serial.print(state_d[1]); Serial.print(", ");
+//       Serial.print(state_d[2]); Serial.print(", ");
+//       Serial.print(state_d[3]); Serial.print(", ");
+//       Serial.print(state_d[4]); Serial.print(", ");
+//       Serial.print(state_d[5]); Serial.print(", ");
+//       Serial.print(state_d[6]);
+//       Serial.println();
 
-
+  quat_t quat_d = quat_t(state_d[0], state_d[1], state_d[2], state_d[3]);
 
   //use for the counication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
   //for a range of -1.6Nm to 1.6 Nm
   vector_3t current; 
   if (initialized) {
-    getTorque(state, quat_a, current);  
+    getTorque(state, quat_d, quat_a, current);  
   } else {
     current[0] = 0;
     current[1] = 0;
     current[2] = 0;
   }
-  
-//  Serial.print(current[0]); Serial.print(" ");
-//  Serial.print(current[1]); Serial.print(" ");
-//  Serial.print(current[2]); Serial.print(" ");
-//  Serial.println();
 
   ////////////////////Safety///////////////////////
   for (int i = 0; i < 3; i++) {
@@ -491,23 +586,9 @@ void loop() {
     elmo.cmdTC(current[1],IDX_K2);
     elmo.cmdTC(current[2],IDX_K3); 
   }
-
-//    elmo.cmdTC(1,IDX_K1);
-//    delay(1000);
-//    elmo.cmdTC(-1,IDX_K1);
-//    delay(1000);
-//    elmo.cmdTC(0,IDX_K1);
-//    elmo.cmdTC(1,IDX_K2);
-//    delay(1000);
-//    elmo.cmdTC(-1,IDX_K2);
-//    delay(1000);
-//    elmo.cmdTC(0,IDX_K2);
-//    elmo.cmdTC(1,IDX_K3);
-//    delay(1000);
-//    elmo.cmdTC(-1,IDX_K3);
-//    delay(1000);
-//    elmo.cmdTC(0,IDX_K3);
+//  uint32_t Tc1 = micros();
+//  Serial.println(Tc1-Tc0);
 
  // send u4 current command to leg over serial RX/TX between teensy boards
- //  delay(1);
+   delay(1);
 }
