@@ -207,12 +207,12 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, signal_callback_handler);
 
-	ros::init(argc, argv, "listener");
-	ros::NodeHandle n;
-	ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
-	while(ros::ok()){
-          ros::spinOnce();
-	//while(1) {
+	//ros::init(argc, argv, "listener");
+	//ros::NodeHandle n;
+	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
+	//while(ros::ok()){
+          //ros::spinOnce();
+	while(1) {
           t1 = std::chrono::high_resolution_clock::now();
           
           state_vec = getStateFromESP();

@@ -24,7 +24,7 @@ float x_d[7];
 #define MAX_CURRENT 12  //  15
 #define MIN_CURRENT -12 // -15
 
-#define TIMEOUT_INTERVAL 1000 // ms to timeout
+#define TIMEOUT_INTERVAL 100 // ms to timeout
 
 using vector_3t = Eigen::Matrix<float, 3, 1>;
 using vector_4t = Eigen::Matrix<float, 4, 1>;
@@ -41,25 +41,25 @@ using quat_t = Eigen::Quaternion<float>;
 #define kp_y 15.0
 #define kp_rp 120.0
 #define kd_y 1.0
-#define kd_rp 2.0
+#define kd_rp 4.0 // 6 is better, but then I need a filter.
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
 volatile float dP = 0;
 volatile float dY = 0;
-volatile float x1;
-volatile float v1;
-volatile float x2;
-volatile float v2;
-volatile float x3;
-volatile float v3;
-volatile float q0;
-volatile float q1;
-volatile float q2;
-volatile float q3;
+volatile float x1 = 0;
+volatile float v1 = 0;
+volatile float x2 = 0;
+volatile float v2 = 0;
+volatile float x3 = 0;
+volatile float v3 = 0;
+volatile float q0 = 1;
+volatile float q1 = 0;
+volatile float q2 = 0;
+volatile float q3 = 0;
 
 quat_t quat_init;
 quat_t quat_init_inverse;
-bool initialized = false;
+volatile bool initialized = false;
 bool time_initialized = false;
 
 Koios *koios;
@@ -118,17 +118,18 @@ void setup() {
   koios->waitSwitch(0);
 //  koios->setSigB(0);
   koios-> setLogo('A');
-  delay(5000);
+//  delay(5000);
   koios->flashG(2);
-  delay(5000);
+//  delay(5000);
 
   rt = threads.setSliceMicros(50);
   threads.addThread(imuThread);
-  koios->setLEDs("0001");
-  delay(2000);
-  Serial7.clear();
-  koios->setLogo('R');
   threads.addThread(ESPthread);
+  koios->setLEDs("0001");
+//  Serial7.clear();
+  koios->setLogo('R');
+  delay(5000);
+  
 }
 
 //============FUNCTIONS==========
@@ -142,15 +143,17 @@ void delayLoop(uint32_t T1, uint32_t L){
 
 volatile bool ESP_connected = false;
 
-//std::mutex serial_mtx;
+std::mutex state_mtx;
 
 void ESPthread() {
   while(1){
-
+    if (initialized) {
     char receivedCharsTeensy[10*sizeof(float)+8+1];
     receivedCharsTeensy[0] = 0b11111111;
     receivedCharsTeensy[1] = 0b11111111;
+    {std::lock_guard<std::mutex> lck(state_mtx);
     memcpy(receivedCharsTeensy+2, state, 40);
+    }
      
     for (int i = 0; i < 6; i++) {
         byte oneAdded = 0b00000001;
@@ -166,12 +169,11 @@ void ESPthread() {
   
   //  {std::lock_guard<std::mutex> lck(serial_mtx);
     Serial7.print(receivedCharsTeensy);
-//    Serial7.flush();
+    Serial7.flush();
   //  }
    
     int index = 0;
     while(index < 34) {
-  //    std::lock_guard<std::mutex> lck(serial_mtx);
       if (Serial7.available() > 0) {
         receivedCharsESP[index] = Serial7.read();
         index++;
@@ -192,7 +194,10 @@ void ESPthread() {
     } else {
       last_ESP_message = current_ESP_message;
     }
-//    threads.delay_us(1000);
+    threads.delay_us(100);
+    } else{
+      threads.delay_us(2000);
+    }
   }
 }
 
@@ -371,7 +376,6 @@ void exitProgram() {
 }
 
 void loop() {
-//  uint32_t Tc0 = micros();
   static float Q0 = 0;
   static float Q1 = 0;
   static float Q2 = 0;
@@ -379,42 +383,6 @@ void loop() {
   static float DY = 0;
   static float DP = 0;
   static float DR = 0;
-  
-  //check if imu data is not corrupted
-  int rt = koios->checkFrame(q0,q1,q2,q3,dY,dP,dR);
-  //based on imu upadate states
-  if(rt==1){
-    Q0 = q0;
-    Q1 = q1;
-    Q2 = q2;
-    Q3 = q3;
-    DY = dY;
-    DP = dP;
-    DR = dR;
-  }
-  koios->updateStates(x1,v1,x2,v2,x3,v3);
-  // Add step to get leg length from Bia here over serial
-  state[0] = v1;
-  state[1] = v3;
-  state[2] = v2;
-  state[3] = DR;
-  state[4] = DP;
-  state[5] = DY;
-  state[6] = Q0;
-  state[7] = Q1;
-  state[8] = Q2;
-  state[9] = Q3;
-
-//  state[0] = 0;
-//  state[1] = 1;
-//  state[2] = 2;
-//  state[3] = 3;
-//  state[4] = 4;
-//  state[5] = 5;
-//  state[6] = 1;
-//  state[7] = 0;
-//  state[8] = 0;
-//  state[9] = 0;
 
   static int reset_cmd = 0;
 
@@ -440,6 +408,7 @@ void loop() {
     }
     koios->updateStates(x1,v1,x2,v2,x3,v3);
     // Add step to get leg length from Bia here over serial
+    {std::lock_guard<std::mutex> lck(state_mtx);
     state[0] = v1;
     state[1] = v3;
     state[2] = v2;
@@ -450,6 +419,7 @@ void loop() {
     state[7] = Q1;
     state[8] = Q2;
     state[9] = Q3;
+    }
     state_tmp << state[9], state[6], state[7], state[8];
     if (state_tmp.norm() > 0.95 && state_tmp.norm() < 1.05) {
          Serial.print(state[9]); Serial.print(", ");
@@ -464,63 +434,10 @@ void loop() {
     } 
   }
 
-  if (initialized) {
-    quat_a = quat_t(state[9], state[6], state[7], state[8]); // assuming q_w is last.
-    quat_a = quat_init_inverse*quat_a;
-  
-    state[6] = quat_a.w();
-    state[7] = quat_a.x();
-    state[8] = quat_a.y();
-    state[9] = quat_a.z();
-  }
-
   while(!ESP_connected) {}
+  Serial.println("Going");
 
 //  ESPthread();
-
-// char receivedCharsTeensy[10*sizeof(float)+8+1];
-//  receivedCharsTeensy[0] = 0b11111111;
-//  receivedCharsTeensy[1] = 0b11111111;
-//  memcpy(receivedCharsTeensy+2, state, 40);
-//   
-//  for (int i = 0; i < 6; i++) {
-//      byte oneAdded = 0b00000001;
-//      for (int j = 1; j < 8; j++){
-//        if (receivedCharsTeensy[i*7+(j-1)+2] == 0b00000000) {
-//          receivedCharsTeensy[i*7+(j-1)+2] = 0b00000001;
-//          oneAdded += (1 << (8-j));
-//        }
-//      }
-//      memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
-//  }
-//  receivedCharsTeensy[48] = 0b0;
-//
-////  {std::lock_guard<std::mutex> lck(serial_mtx);
-//  Serial7.print(receivedCharsTeensy);
-//  Serial7.flush();
-////  }
-// 
-//  int index = 0;
-//  while(index < 34) {
-////    std::lock_guard<std::mutex> lck(serial_mtx);
-//    if (Serial7.available() > 0) {
-//      receivedCharsESP[index] = Serial7.read();
-//      index++;
-//    }
-//    if (time_initialized) {
-//      current_ESP_message = millis();
-//      if (current_ESP_message - last_ESP_message > TIMEOUT_INTERVAL) {
-//        exitProgram();
-//      }
-//    }
-//  }
-//
-//  if (!time_initialized) {
-//    last_ESP_message = millis();
-//    time_initialized = true;
-//  } else {
-//    last_ESP_message = current_ESP_message;
-//  }
 
   ///////////////////Print Binary////////////////////
   //  for (int i = 0; i < 34; i++) {
@@ -528,6 +445,85 @@ void loop() {
   //    Serial.print(" ");
   //  }
   //  Serial.println();
+
+  
+  //check if imu data is not corrupted
+  int rt2 = koios->checkFrame(q0,q1,q2,q3,dY,dP,dR);
+  Serial.println(rt2);
+  //based on imu upadate states
+  if(rt2==1){
+    Q0 = q0;
+    Q1 = q1;
+    Q2 = q2;
+    Q3 = q3;
+    DY = dY;
+    DP = dP;
+    DR = dR;
+  }
+  koios->updateStates(x1,v1,x2,v2,x3,v3);
+  // Add step to get leg length from Bia here over serial
+  {std::lock_guard<std::mutex> lck(state_mtx);
+  state[0] = v1;
+  state[1] = v3;
+  state[2] = v2;
+  state[3] = DR;
+  state[4] = DP;
+  state[5] = DY;
+  state[6] = Q0;
+  state[7] = Q1;
+  state[8] = Q2;
+  state[9] = Q3;
+
+  state_tmp << state[9], state[6], state[7], state[8];
+    if (state_tmp.norm() > 1.05 || state_tmp.norm() < 0.95) {
+      exitProgram();
+    }
+    Serial.println("----------1-------------");
+   Serial.print(state[0]); Serial.print(", ");
+   Serial.print(state[1]); Serial.print(", ");
+   Serial.print(state[2]); Serial.print(", ");
+   Serial.print(state[3]); Serial.print(", ");
+   Serial.print(state[4]); Serial.print(", ");
+   Serial.print(state[5]); Serial.print(", ");
+   Serial.print(state[6]); Serial.print(", ");
+   Serial.print(state[7]); Serial.print(", ");
+   Serial.print(state[8]); Serial.print(", ");
+   Serial.print(state[9]); Serial.print(", ");
+   Serial.println();
+
+  if (initialized) {
+    quat_a = quat_t(state[9], state[6], state[7], state[8]); // assuming q_w is last.
+    quat_a = quat_init_inverse*quat_a;
+
+    state[6] = quat_a.w();
+    state[7] = quat_a.x();
+    state[8] = quat_a.y();
+    state[9] = quat_a.z();
+  }
+
+//  state[0] = 0;
+//  state[1] = 1;
+//  state[2] = 2;
+//  state[3] = 3;
+//  state[4] = 4;
+//  state[5] = 5;
+//  state[6] = 1;
+//  state[7] = 0;
+//  state[8] = 0;
+//  state[9] = 0;
+  }
+  Serial.println("----------2-------------");
+   Serial.print(state[0]); Serial.print(", ");
+   Serial.print(state[1]); Serial.print(", ");
+   Serial.print(state[2]); Serial.print(", ");
+   Serial.print(state[3]); Serial.print(", ");
+   Serial.print(state[4]); Serial.print(", ");
+   Serial.print(state[5]); Serial.print(", ");
+   Serial.print(state[6]); Serial.print(", ");
+   Serial.print(state[7]); Serial.print(", ");
+   Serial.print(state[8]); Serial.print(", ");
+   Serial.print(state[9]); Serial.print(", ");
+   Serial.println();
 
   memcpy(oneAdded, receivedCharsESP+2+28, 4*sizeof(char));
   for (int i = 0; i < 4; i++) {
