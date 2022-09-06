@@ -276,5 +276,5 @@ int main(int argc, char **argv)
 	close(sockfd);
 }
 
-//roslaunch vrpn_client_ros fast.launch server:=192.168.1.5
+//roslaunch vrpn_client_ros fast.launch server:=169.254.10.83
 //ifconfig enx5c857e36c21a 169.254.10.80

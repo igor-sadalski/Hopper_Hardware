@@ -38,10 +38,20 @@ using quat_t = Eigen::Quaternion<float>;
 //#define kd_y 0.7
 //#define kd_rp 1.5
 
+// These gains are if the set point is very far away
+//#define kp_y 15.0
+//#define kp_rp 120.0
+//#define kd_y 1.0
+//#define kd_rp 4.0 // 6 is better, but then I need a filter.
+
+// These gains are for MPC
+// 10x gain caused massive chatter
+// These gains have almost no tracking
 #define kp_y 15.0
 #define kp_rp 120.0
 #define kd_y 1.0
 #define kd_rp 4.0 // 6 is better, but then I need a filter.
+
 //use volatile if we need to use threading for our robot
 volatile float dR = 0;
 volatile float dP = 0;
@@ -118,9 +128,7 @@ void setup() {
   koios->waitSwitch(0);
 //  koios->setSigB(0);
   koios-> setLogo('A');
-//  delay(5000);
   koios->flashG(2);
-//  delay(5000);
 
   rt = threads.setSliceMicros(50);
   threads.addThread(imuThread);
@@ -316,27 +324,14 @@ matrix_3t cross(vector_3t q) {
 char oneAdded[4];
 quat_t quat_a;
 
-void getTorque(float* state, quat_t quat_d, quat_t quat_a, vector_3t &torque) {
+void getTorque(float* state, quat_t quat_d, vector_3t omega_d, quat_t quat_a, vector_3t &torque) {
     vector_3t delta_omega;
     vector_3t omega_a;
-    vector_3t omega_d;
     vector_4t quat_d_vec;
     vector_4t quat_a_vec;
 
-// 1-2-3 -- no
     quat_t quat_actuator = quat_t(0.8806, 0.3646, -0.2795, 0.1160);
-// 3-1-2 -- no
-//    quat_t quat_actuator = quat_t(0.3400, 0.4249, 0.1758, 0.8204);
-// 2-3-1 -- no
-//    quat_t quat_actuator = quat_t(0.5405, -0.0607, -0.4558, -0.7053);
-// 3-2-1 -- def no
-//    quat_t quat_actuator = quat_t(0.6847, 0.2106, 0.0878, -0.1092);
-//    quat_t quat_d = quat_t(1,0,0,0);
-    omega_d << 0,0,0;
     omega_a << state[3], state[4], state[5];
-
-//    quat_d *= quat_actuator;
-//    quat_a *= quat_actuator;
 
     quat_d_vec << quat_d.w(), quat_d.x(), quat_d.y(), quat_d.z();
     quat_a_vec << quat_a.w(), quat_a.x(), quat_a.y(), quat_a.z();
@@ -349,11 +344,6 @@ void getTorque(float* state, quat_t quat_d, quat_t quat_a, vector_3t &torque) {
     Kd.setZero();
     Kp.diagonal() << kp_rp, kp_rp, kp_y;
     Kd.diagonal() << kd_rp, kd_rp, kd_y;
-
-//    Serial.print(delta_quat(0)); Serial.print(", ");
-//    Serial.print(delta_quat(1)); Serial.print(", ");
-//    Serial.print(delta_quat(2)); Serial.print(", ");
-//    Serial.println();
 
     vector_3t tau;
     delta_omega = -quat_actuator.inverse()._transformVector(omega_a) - omega_d;
@@ -437,8 +427,6 @@ void loop() {
   while(!ESP_connected) {}
   Serial.println("Going");
 
-//  ESPthread();
-
   ///////////////////Print Binary////////////////////
   //  for (int i = 0; i < 34; i++) {
   //    Serial.print(receivedCharsESP[i], BIN);
@@ -463,67 +451,32 @@ void loop() {
   koios->updateStates(x1,v1,x2,v2,x3,v3);
   // Add step to get leg length from Bia here over serial
   {std::lock_guard<std::mutex> lck(state_mtx);
-  state[0] = v1;
-  state[1] = v3;
-  state[2] = v2;
-  state[3] = DR;
-  state[4] = DP;
-  state[5] = DY;
-  state[6] = Q0;
-  state[7] = Q1;
-  state[8] = Q2;
-  state[9] = Q3;
-
-  state_tmp << state[9], state[6], state[7], state[8];
-    if (state_tmp.norm() > 1.05 || state_tmp.norm() < 0.95) {
-      exitProgram();
+    state[0] = v1;
+    state[1] = v3;
+    state[2] = v2;
+    state[3] = DR;
+    state[4] = DP;
+    state[5] = DY;
+    state[6] = Q0;
+    state[7] = Q1;
+    state[8] = Q2;
+    state[9] = Q3;
+  
+    state_tmp << state[9], state[6], state[7], state[8];
+      if (state_tmp.norm() > 1.05 || state_tmp.norm() < 0.95) {
+        exitProgram();
+      }
+  
+    if (initialized) {
+      quat_a = quat_t(state[9], state[6], state[7], state[8]); // assuming q_w is last.
+      quat_a = quat_init_inverse*quat_a;
+  
+      state[6] = quat_a.w();
+      state[7] = quat_a.x();
+      state[8] = quat_a.y();
+      state[9] = quat_a.z();
     }
-    Serial.println("----------1-------------");
-   Serial.print(state[0]); Serial.print(", ");
-   Serial.print(state[1]); Serial.print(", ");
-   Serial.print(state[2]); Serial.print(", ");
-   Serial.print(state[3]); Serial.print(", ");
-   Serial.print(state[4]); Serial.print(", ");
-   Serial.print(state[5]); Serial.print(", ");
-   Serial.print(state[6]); Serial.print(", ");
-   Serial.print(state[7]); Serial.print(", ");
-   Serial.print(state[8]); Serial.print(", ");
-   Serial.print(state[9]); Serial.print(", ");
-   Serial.println();
-
-  if (initialized) {
-    quat_a = quat_t(state[9], state[6], state[7], state[8]); // assuming q_w is last.
-    quat_a = quat_init_inverse*quat_a;
-
-    state[6] = quat_a.w();
-    state[7] = quat_a.x();
-    state[8] = quat_a.y();
-    state[9] = quat_a.z();
   }
-
-//  state[0] = 0;
-//  state[1] = 1;
-//  state[2] = 2;
-//  state[3] = 3;
-//  state[4] = 4;
-//  state[5] = 5;
-//  state[6] = 1;
-//  state[7] = 0;
-//  state[8] = 0;
-//  state[9] = 0;
-  }
-  Serial.println("----------2-------------");
-   Serial.print(state[0]); Serial.print(", ");
-   Serial.print(state[1]); Serial.print(", ");
-   Serial.print(state[2]); Serial.print(", ");
-   Serial.print(state[3]); Serial.print(", ");
-   Serial.print(state[4]); Serial.print(", ");
-   Serial.print(state[5]); Serial.print(", ");
-   Serial.print(state[6]); Serial.print(", ");
-   Serial.print(state[7]); Serial.print(", ");
-   Serial.print(state[8]); Serial.print(", ");
-   Serial.print(state[9]); Serial.print(", ");
-   Serial.println();
 
   memcpy(oneAdded, receivedCharsESP+2+28, 4*sizeof(char));
   for (int i = 0; i < 4; i++) {
@@ -548,13 +501,14 @@ void loop() {
 //       Serial.println();
 
   quat_t quat_d = quat_t(state_d[0], state_d[1], state_d[2], state_d[3]);
+  vector_3t omega_d = vector_3t(state_d[4], state_d[5], state_d[6]);
 
   //use for the counication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
   //for a range of -1.6Nm to 1.6 Nm
   vector_3t current; 
   if (initialized) {
-    getTorque(state, quat_d, quat_a, current);  
+    getTorque(state, quat_d, omega_d, quat_a, current);  
   } else {
     current[0] = 0;
     current[1] = 0;
