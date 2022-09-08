@@ -59,25 +59,22 @@ union convert {
 } val;
 
 void loop() {
-  char receivedCharsTeensy[10 * sizeof(float) + 8 + 1];
-  char receivedCharsPC[34];
-  char sendCharsTeensy[34+1];
+  char receivedCharsTeensy[13*sizeof(float)+8+1];
+  char receivedCharsPC[46];
+  char sendCharsTeensy[46+1];
 
   WiFiClient client = server.available();
 
   if (client) {
-    for (int i = 0; i < 48; i++) {
+    for (int i = 0; i < 60; i++) {
       receivedCharsTeensy[i] = 0b10;
     }
-    for (int i = 0; i < 2; i++) {
-      receivedCharsTeensy[i] = 0b11111111;
-    }
-    receivedCharsTeensy[48] = 0b0;
+    receivedCharsTeensy[60] = 0b0;
     client.flush();
     delay(2000);
     while (client.connected()) {
       int index = 0;
-      while(index < 48) {
+      while(index < 60) {
         if (Serial.available() > 0) {
           receivedCharsTeensy[index] = Serial.read();
           index++;
@@ -87,14 +84,14 @@ void loop() {
       client.flush();
   
       index = 0;
-      while (index < 34) {
+      while (index < 46) {
         if (client.available() > 0) {
           receivedCharsPC[index] = client.read();
           index++;
         }
       }
       memcpy(sendCharsTeensy, receivedCharsPC, sizeof(sendCharsTeensy));
-      sendCharsTeensy[34] = 0b0;
+      sendCharsTeensy[46] = 0b0;
       Serial.print(sendCharsTeensy); //turned off for debugging
     }
     client.stop();

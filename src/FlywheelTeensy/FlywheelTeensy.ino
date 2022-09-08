@@ -11,11 +11,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+//#define TEST_TEENSY
+
 using namespace Archer;
 using namespace Eigen;
 
 //==================CONSTANTS
-TripENC tENC(trip_CS1,trip_CS2,trip_CS3);
+TripENC tENC(trip_CS1, trip_CS2, trip_CS3);
 ELMO_CANt4 elmo;
 
 float x_d[7];
@@ -75,15 +77,11 @@ bool time_initialized = false;
 Koios *koios;
 
 int nF;
-int rt = 0;
+bool rt = 0;
 
-const byte numChars = 128;
-char receivedChars[numChars]; //change here to get more charactes in the string
 boolean newData = false;
 //this is only for the first debugging run
-char messageFromRobot[128]; //fill in the exact length of the message you will be sending
-char exactMessage[40]; //fill in the exact length of the message you will be sending
-float state[10];
+float state[13];
 
 //===========SPEEDING UP BABY
 char additional_read_buffer[3000]; //this values are out of nowhere
@@ -92,58 +90,70 @@ char additional_write_buffer[3000];
 
 unsigned long last_ESP_message;
 unsigned long current_ESP_message;
-char receivedCharsESP[34];
+char receivedCharsESP[46];
+float foot_state[3];
 
 //=================SETUP=============
 
 bool exit_state = false;
 
 void setup() {
-
   //====================WIFI==============
   delay(100); //give time to open and print
   Serial.begin(115200); //this is for the monitor
   Serial7.begin(115200); //baud rates must be the same
-  while (!Serial7) {;}
+  while (!Serial7) {
+    ;
+  }
   delay(100);
-  
-  //start a diode to be sure all is working
-  pinMode(LED_BUILTIN,OUTPUT);
-  digitalWrite(LED_BUILTIN,HIGH);
 
-//  //================Koios=============
+  //start a diode to be sure all is working
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+
+  //  //================Koios=============
   koios = new Koios(tENC, elmo);
   koios->initKoios1(1);
 
+#ifndef TEST_TEENSY
   // initKoios2
   delay(250);
   koios->STO(1);
   koios->waitSwitch(1); //manual switch on robot
-//  koios->setSigB(1);
+  koios->setSigB(1);
   delay(250);
   rt = koios->motorsOn();
   delay(5000);
   koios->resetStates();
   koios->setLEDs("0100");
   koios->waitSwitch(0);
-//  koios->setSigB(0);
+  koios->setSigB(0);
   koios-> setLogo('A');
   koios->flashG(2);
+#endif
 
-  rt = threads.setSliceMicros(50);
+  rt = threads.setSliceMicros(25);
+#ifndef TEST_TEENSY
   threads.addThread(imuThread);
+  threads.addThread(BiaThread);
+#endif
   threads.addThread(ESPthread);
+  delay(5000);
+  foot_state[0] = 0;
+  foot_state[1] = 0;
+  foot_state[2] = 0;
+#ifndef TEST_TEENSY
   koios->setLEDs("0001");
-//  Serial7.clear();
+  //  Serial7.clear();
   koios->setLogo('R');
   delay(5000);
-  
+#endif
 }
 
 //============FUNCTIONS==========
-void delayLoop(uint32_t T1, uint32_t L){
+void delayLoop(uint32_t T1, uint32_t L) {
   uint32_t T2 = micros();
-  if((T2-T1)<L){
+  if ((T2 - T1) < L) {
     uint32_t a = L + T1 - T2;
     threads.delay_us(a);
   }
@@ -151,161 +161,260 @@ void delayLoop(uint32_t T1, uint32_t L){
 
 volatile bool ESP_connected = false;
 
-std::mutex state_mtx;
+Threads::Mutex state_mtx;
+Threads::Mutex foot_state_mtx;
+Threads::Mutex serial_mtx;
+
+//ThreadWrap(Serial, SerialXtra);
+//#define Serial ThreadClone(SerialXtra)
+//ThreadWrap(B_PORT, SerialXtra2);
+//#define B_PORT ThreadClone(SerialXtra2)
+//ThreadWrap(IMU_PORT, SerialXtra3);
+//#define IMU_PORT ThreadClone(SerialXtra3)
+
+void BiaThread() {
+  while (1) {
+//    #ifdef TEST_TEENSY
+//    { Threads::Scope scope(foot_state_mtx);
+//    foot_state[0] = 3;
+//    foot_state[1] = 4;
+//    foot_state[2] = 5;
+//    }
+//    #else
+    int index = 0;
+    char receivedCharsBia[11];
+//    {
+//    Threads::Scope scope(serial_mtx);
+    if (B_PORT.available() > 0) {
+      while (index < 11) {
+        { 
+        if (B_PORT.available() > 0) {
+          receivedCharsBia[index] = B_PORT.read();
+          index++;
+        }
+        }
+      }
+    }
+//    }
+    char oneAddedBia[2];
+    memcpy(oneAddedBia, receivedCharsBia + 9, 2 * sizeof(char));
+    for (int i = 0; i < 2; i++) {
+      for (int j = 1; j < 8; j++) {
+        if (oneAddedBia[i] & (1 << (8 - j))) {
+          receivedCharsBia[i * 7 + (j - 1)] = 0;
+        }
+      }
+    }
+    { Threads::Scope scope(foot_state_mtx);
+    foot_state[0] = (float) receivedCharsBia[0];
+    memcpy(foot_state+1, receivedCharsBia + 1, 2 * 4);
+    }
+//    #endif
+    threads.delay_us(500);
+  }
+}
 
 void ESPthread() {
-  while(1){
+  bool read_data = true;
+  while (1) {
     if (initialized) {
-    char receivedCharsTeensy[10*sizeof(float)+8+1];
-    receivedCharsTeensy[0] = 0b11111111;
-    receivedCharsTeensy[1] = 0b11111111;
-    {std::lock_guard<std::mutex> lck(state_mtx);
-    memcpy(receivedCharsTeensy+2, state, 40);
-    }
-     
-    for (int i = 0; i < 6; i++) {
-        byte oneAdded = 0b00000001;
-        for (int j = 1; j < 8; j++){
-          if (receivedCharsTeensy[i*7+(j-1)+2] == 0b00000000) {
-            receivedCharsTeensy[i*7+(j-1)+2] = 0b00000001;
-            oneAdded += (1 << (8-j));
-          }
+      if (read_data) {
+        char receivedCharsTeensy[13 * sizeof(float) + 8 + 1];
+        { Threads::Scope scope(state_mtx);
+          memcpy(receivedCharsTeensy, state, 52);
         }
-        memcpy(&receivedCharsTeensy[40+i+2], &oneAdded, 1);
-    }
-    receivedCharsTeensy[48] = 0b0;
   
-  //  {std::lock_guard<std::mutex> lck(serial_mtx);
-    Serial7.print(receivedCharsTeensy);
-    Serial7.flush();
-  //  }
-   
-    int index = 0;
-    while(index < 34) {
-      if (Serial7.available() > 0) {
-        receivedCharsESP[index] = Serial7.read();
-        index++;
+        for (int i = 0; i < 8; i++) {
+          byte oneAdded = 0b00000001;
+          for (int j = 1; j < 8; j++) {
+            if (receivedCharsTeensy[i * 7 + (j - 1)] == 0b00000000) {
+              receivedCharsTeensy[i * 7 + (j - 1)] = 0b00000001;
+              oneAdded += (1 << (8 - j));
+            }
+          }
+          memcpy(&receivedCharsTeensy[52 + i], &oneAdded, 1);
+        }
+        receivedCharsTeensy[60] = 0b0;
+  
+        Serial7.print(receivedCharsTeensy);
+        Serial7.flush();
+        read_data = false;
       }
+
+      int index = 0;
+      if (Serial7.available() > 0) {
+        while (index < 46) {
+          if (Serial7.available() > 0) {
+            receivedCharsESP[index] = Serial7.read();
+            index++;
+          }
+          
+        }
+        if (!time_initialized) {
+          last_ESP_message = millis();
+          time_initialized = true;
+        } else {
+          last_ESP_message = millis();
+        }
+        ESP_connected = true;
+        read_data = true;
+        threads.delay_us(100);
+      } else {
+        threads.yield();
+      }
+
       if (time_initialized) {
         current_ESP_message = millis();
         if (current_ESP_message - last_ESP_message > TIMEOUT_INTERVAL) {
+          Serial.print("Exiting because ESP message took: ");
+          Serial.println(current_ESP_message - last_ESP_message);
           exitProgram();
         }
       }
-    }
-
-    ESP_connected = true;
-  
-    if (!time_initialized) {
-      last_ESP_message = millis();
-      time_initialized = true;
+      
     } else {
-      last_ESP_message = current_ESP_message;
-    }
-    threads.delay_us(100);
-    } else{
       threads.delay_us(2000);
     }
   }
 }
 
-void imuThread(){
-  while(1){
-    if(IMU_PORT.available() > 0){
-      uint8_t byt = IMU_PORT.read();
-      if(byt == 0xFA){
-        threads.delay_us(350);
-        for(int i=0;i<3;i++){
+void imuThread() {
+  while (1) {
+    if (IMU_PORT.available() > 0) {
+      uint8_t byt;
+      uint8_t b0;
+      uint8_t b1;
+      uint8_t b2;
+      uint8_t b3;
+//      { Threads::Scope scope(serial_mtx);
+      byt = IMU_PORT.read();
+//      }
+      if (byt == 0xFA) {
+//        threads.delay_us(350);
+        delayMicroseconds(350);
+//        { Threads::Scope scope(serial_mtx);
+        for (int i = 0; i < 3; i++) {
           IMU_PORT.read();
         }
+//        }
         //=========================================================
-        union{
+        union {
           long y;
           float z;
-        }Q0;
-        uint8_t b0 = IMU_PORT.read();
-        uint8_t b1 = IMU_PORT.read();
-        uint8_t b2 = IMU_PORT.read();
-        uint8_t b3 = IMU_PORT.read();
-        uint8_t bQ0[4] = {b0,b1,b2,b3};
-        long x = (long)bQ0[3]<<24|(long)bQ0[2]<<16|bQ0[1]<<8|bQ0[0];
-        Q0.y = x;
-        q0 = Q0.z;
+        } Q0_;
+//        { Threads::Scope scope(serial_mtx);
+        b0 = IMU_PORT.read();
+        b1 = IMU_PORT.read();
+        b2 = IMU_PORT.read();
+        b3 = IMU_PORT.read();
+//        }
+        uint8_t bQ0[4] = {b0, b1, b2, b3};
+        long x = (long)bQ0[3] << 24 | (long)bQ0[2] << 16 | bQ0[1] << 8 | bQ0[0];
+        Q0_.y = x;
+        { Threads::Scope scope(state_mtx);
+        q0 = Q0_.z;
+        }
         //=========================================================
-        union{
+        union {
           long y;
           float z;
-        }Q1;
+        } Q1_;
+//        { Threads::Scope scope(serial_mtx);
         b0 = IMU_PORT.read();
         b1 = IMU_PORT.read();
         b2 = IMU_PORT.read();
         b3 = IMU_PORT.read();
-        uint8_t bQ1[4] = {b0,b1,b2,b3};
-        x = (long)bQ1[3]<<24|(long)bQ1[2]<<16|bQ1[1]<<8|bQ1[0];
-        Q1.y = x;
-        q1 = Q1.z;
-        union{
+//        }
+        uint8_t bQ1[4] = {b0, b1, b2, b3};
+        x = (long)bQ1[3] << 24 | (long)bQ1[2] << 16 | bQ1[1] << 8 | bQ1[0];
+        Q1_.y = x;
+        { Threads::Scope scope(state_mtx);
+        q1 = Q1_.z;
+        }
+        union {
           long y;
           float z;
-        }Q2;
+        } Q2_;
+//        { Threads::Scope scope(serial_mtx);
         b0 = IMU_PORT.read();
         b1 = IMU_PORT.read();
         b2 = IMU_PORT.read();
         b3 = IMU_PORT.read();
-        uint8_t bQ2[4] = {b0,b1,b2,b3};
-        x = (long)bQ2[3]<<24|(long)bQ2[2]<<16|bQ2[1]<<8|bQ2[0];
-        Q2.y = x;
-        q2 = Q2.z;
-        union{
+//        }
+        uint8_t bQ2[4] = {b0, b1, b2, b3};
+        x = (long)bQ2[3] << 24 | (long)bQ2[2] << 16 | bQ2[1] << 8 | bQ2[0];
+        Q2_.y = x;
+        { Threads::Scope scope(state_mtx);
+        q2 = Q2_.z;
+        }
+        union {
           long y;
           float z;
-        }Q3;
+        } Q3_;
+//        { Threads::Scope scope(serial_mtx);
         b0 = IMU_PORT.read();
         b1 = IMU_PORT.read();
         b2 = IMU_PORT.read();
         b3 = IMU_PORT.read();
-        uint8_t bQ3[4] = {b0,b1,b2,b3};
-        x = (long)bQ3[3]<<24|(long)bQ3[2]<<16|bQ3[1]<<8|bQ3[0];
-        Q3.y = x;
-        q3 = Q3.z;
-        union{
+//        }
+        uint8_t bQ3[4] = {b0, b1, b2, b3};
+        x = (long)bQ3[3] << 24 | (long)bQ3[2] << 16 | bQ3[1] << 8 | bQ3[0];
+        Q3_.y = x;
+        { Threads::Scope scope(state_mtx);
+        q3 = Q3_.z;
+        }
+        union {
           long y;
           float z;
-        }RR;
+        } RR;
+//        { Threads::Scope scope(serial_mtx);
         b0 = IMU_PORT.read();
         b1 = IMU_PORT.read();
         b2 = IMU_PORT.read();
         b3 = IMU_PORT.read();
-        uint8_t bR[4] = {b0,b1,b2,b3};
-        x = (long)bR[3]<<24|(long)bR[2]<<16|bR[1]<<8|bR[0];
+//        }
+        uint8_t bR[4] = {b0, b1, b2, b3};
+        x = (long)bR[3] << 24 | (long)bR[2] << 16 | bR[1] << 8 | bR[0];
         RR.y = x;
+        { Threads::Scope scope(state_mtx);
         dR = RR.z;
-        union{
+        }
+        union {
           long y;
           float z;
-        }PP;
+        } PP;
+//        { Threads::Scope scope(serial_mtx);
         b0 = IMU_PORT.read();
         b1 = IMU_PORT.read();
         b2 = IMU_PORT.read();
         b3 = IMU_PORT.read();
-        uint8_t bP[4] = {b0,b1,b2,b3};
-        x = (long)bP[3]<<24|(long)bP[2]<<16|bP[1]<<8|bP[0];
+//        }
+        uint8_t bP[4] = {b0, b1, b2, b3};
+        x = (long)bP[3] << 24 | (long)bP[2] << 16 | bP[1] << 8 | bP[0];
         PP.y = x;
+        { Threads::Scope scope(state_mtx);
         dP = PP.z;
-        union{
+        }
+        union {
           long y;
           float z;
-        }YY;
+        } YY;
+//        { Threads::Scope scope(serial_mtx);
         b0 = IMU_PORT.read();
         b1 = IMU_PORT.read();
         b2 = IMU_PORT.read();
         b3 = IMU_PORT.read();
-        uint8_t bY[4] = {b0,b1,b2,b3};
-        x = (long)bY[3]<<24|(long)bY[2]<<16|bY[1]<<8|bY[0];
+//        }
+        uint8_t bY[4] = {b0, b1, b2, b3};
+        x = (long)bY[3] << 24 | (long)bY[2] << 16 | bY[1] << 8 | bY[0];
         YY.y = x;
+        { Threads::Scope scope(state_mtx);
         dY = YY.z;
+        }
+//        { Threads::Scope scope(serial_mtx);
         IMU_PORT.read();
         IMU_PORT.read();
+//        }
         nF++;
       }
     }
@@ -314,59 +423,62 @@ void imuThread(){
 }
 
 matrix_3t cross(vector_3t q) {
-    matrix_3t c;
-    c << 0, -q(2), q(1),
-            q(2), 0, -q(0),
-            -q(1), q(0), 0;
-    return c;
+  matrix_3t c;
+  c << 0, -q(2), q(1),
+  q(2), 0, -q(0),
+  -q(1), q(0), 0;
+  return c;
 }
 
-char oneAdded[4];
+char oneAdded[6];
 quat_t quat_a;
 
-void getTorque(float* state, quat_t quat_d, vector_3t omega_d, quat_t quat_a, vector_3t &torque) {
-    vector_3t delta_omega;
-    vector_3t omega_a;
-    vector_4t quat_d_vec;
-    vector_4t quat_a_vec;
+void getTorque(float* state, quat_t quat_d, vector_3t omega_d, vector_3t tau_ff, quat_t quat_a, vector_3t &torque) {
+  vector_3t delta_omega;
+  vector_3t omega_a;
+  vector_4t quat_d_vec;
+  vector_4t quat_a_vec;
 
-    quat_t quat_actuator = quat_t(0.8806, 0.3646, -0.2795, 0.1160);
-    omega_a << state[3], state[4], state[5];
+  quat_t quat_actuator = quat_t(0.8806, 0.3646, -0.2795, 0.1160);
+  omega_a << state[3], state[4], state[5];
 
-    quat_d_vec << quat_d.w(), quat_d.x(), quat_d.y(), quat_d.z();
-    quat_a_vec << quat_a.w(), quat_a.x(), quat_a.y(), quat_a.z();
+  quat_d_vec << quat_d.w(), quat_d.x(), quat_d.y(), quat_d.z();
+  quat_a_vec << quat_a.w(), quat_a.x(), quat_a.y(), quat_a.z();
 
-    vector_3t delta_quat;
-    delta_quat << quat_a_vec[0] * quat_d_vec.segment(1, 3) - quat_d_vec[0] * quat_a_vec.segment(1, 3) -
-                  cross(quat_a_vec.segment(1, 3)) * quat_d_vec.segment(1, 3);
-    matrix_3t Kp, Kd;
-    Kp.setZero();
-    Kd.setZero();
-    Kp.diagonal() << kp_rp, kp_rp, kp_y;
-    Kd.diagonal() << kd_rp, kd_rp, kd_y;
+  vector_3t delta_quat;
+  delta_quat << quat_a_vec[0] * quat_d_vec.segment(1, 3) - quat_d_vec[0] * quat_a_vec.segment(1, 3) -
+             cross(quat_a_vec.segment(1, 3)) * quat_d_vec.segment(1, 3);
+  matrix_3t Kp, Kd;
+  Kp.setZero();
+  Kd.setZero();
+  Kp.diagonal() << kp_rp, kp_rp, kp_y;
+  Kd.diagonal() << kd_rp, kd_rp, kd_y;
 
-    vector_3t tau;
-    delta_omega = -quat_actuator.inverse()._transformVector(omega_a) - omega_d;
-    tau = -quat_actuator.inverse()._transformVector(Kp * delta_quat) - Kd * delta_omega;
+  vector_3t tau_fb;
+  delta_omega = omega_a - omega_d;
+  tau_fb = -quat_actuator.inverse()._transformVector(Kp * delta_quat) - quat_actuator.inverse()._transformVector(-Kd * delta_omega);
 
-    torque << tau*torque_to_current;
+  torque << (tau_fb + tau_ff)*torque_to_current;
 }
 
 //==========================LOOP=============
 
 void exitProgram() {
-    elmo.cmdTC(0.0,IDX_K1);
-    elmo.cmdTC(0.0,IDX_K2);
-    elmo.cmdTC(0.0,IDX_K3); 
-    koios->motorsOff(0);
-    koios->setSigB(1);
-    koios->setLEDs("1000");
-    koios->setLogo('R');
-    while(1) {};
+  elmo.cmdTC(0.0, IDX_K1);
+  elmo.cmdTC(0.0, IDX_K2);
+  elmo.cmdTC(0.0, IDX_K3);
+  koios->motorsOff(0);
+  koios->setSigB(1);
+  koios->setLEDs("1000");
+  koios->setLogo('R');
+  while (1) {};
 }
 
 void loop() {
   static float Q0 = 0;
+#ifdef TEST_TEENSY
+  Q0 = 1;
+#endif
   static float Q1 = 0;
   static float Q2 = 0;
   static float Q3 = 0;
@@ -384,10 +496,11 @@ void loop() {
 
   vector_4t state_tmp;
 
-  while(!initialized) {
-    rt = koios->checkFrame(q0,q1,q2,q3,dY,dP,dR);
+  while (!initialized) {
+    rt = abs(q0) < 2 && abs(q1)<2 && abs(q2)<2 && abs(q3)<2 && abs(dY) < 1e5 && abs(dP) < 1e5 && abs(dR) < 1e5;
+//    koios->checkFrame(q0, q1, q2, q3, dY, dP, dR);
     //based on imu upadate states
-    if(rt==1){
+    if (rt == 1) {
       Q0 = q0;
       Q1 = q1;
       Q2 = q2;
@@ -396,80 +509,39 @@ void loop() {
       DP = dP;
       DR = dR;
     }
-    koios->updateStates(x1,v1,x2,v2,x3,v3);
+    koios->updateStates(x1, v1, x2, v2, x3, v3);
     // Add step to get leg length from Bia here over serial
-    {std::lock_guard<std::mutex> lck(state_mtx);
-    state[0] = v1;
-    state[1] = v3;
-    state[2] = v2;
-    state[3] = DR;
-    state[4] = DP;
-    state[5] = DY;
-    state[6] = Q0;
-    state[7] = Q1;
-    state[8] = Q2;
-    state[9] = Q3;
+    { Threads::Scope scope(state_mtx);
+      Threads::Scope scope2(foot_state_mtx);
+      state[0] = v1;
+      state[1] = v3;
+      state[2] = v2;
+      state[3] = DR;
+      state[4] = DP;
+      state[5] = DY;
+      state[6] = Q0;
+      state[7] = Q1;
+      state[8] = Q2;
+      state[9] = Q3;
+      state[10] = foot_state[0];
+      state[11] = foot_state[1];
+      state[12] = foot_state[2];
     }
-    state_tmp << state[9], state[6], state[7], state[8];
+    state_tmp << (float)state[9], (float)state[6], (float)state[7], (float)state[8];
     if (state_tmp.norm() > 0.95 && state_tmp.norm() < 1.05) {
-         Serial.print(state[9]); Serial.print(", ");
-         Serial.print(state[6]); Serial.print(", ");
-         Serial.print(state[7]); Serial.print(", ");
-         Serial.print(state[8]); Serial.print(", ");
-         Serial.println();
-      quat_init = quat_t(state[9], state[6], state[7], state[8]);
+      Serial.print(state[9]); Serial.print(", ");
+      Serial.print(state[6]); Serial.print(", ");
+      Serial.print(state[7]); Serial.print(", ");
+      Serial.print(state[8]); Serial.print(", ");
+      Serial.println();
+      quat_init = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]);
       quat_init_inverse = quat_init.inverse();
       initialized = true;
       koios->setLogo('G');
-    } 
-  }
-
-  while(!ESP_connected) {}
-  Serial.println("Going");
-
-  ///////////////////Print Binary////////////////////
-  //  for (int i = 0; i < 34; i++) {
-  //    Serial.print(receivedCharsESP[i], BIN);
-  //    Serial.print(" ");
-  //  }
-  //  Serial.println();
-
-  
-  //check if imu data is not corrupted
-  int rt2 = koios->checkFrame(q0,q1,q2,q3,dY,dP,dR);
-  Serial.println(rt2);
-  //based on imu upadate states
-  if(rt2==1){
-    Q0 = q0;
-    Q1 = q1;
-    Q2 = q2;
-    Q3 = q3;
-    DY = dY;
-    DP = dP;
-    DR = dR;
-  }
-  koios->updateStates(x1,v1,x2,v2,x3,v3);
-  // Add step to get leg length from Bia here over serial
-  {std::lock_guard<std::mutex> lck(state_mtx);
-    state[0] = v1;
-    state[1] = v3;
-    state[2] = v2;
-    state[3] = DR;
-    state[4] = DP;
-    state[5] = DY;
-    state[6] = Q0;
-    state[7] = Q1;
-    state[8] = Q2;
-    state[9] = Q3;
-  
-    state_tmp << state[9], state[6], state[7], state[8];
-      if (state_tmp.norm() > 1.05 || state_tmp.norm() < 0.95) {
-        exitProgram();
-      }
-  
-    if (initialized) {
-      quat_a = quat_t(state[9], state[6], state[7], state[8]); // assuming q_w is last.
-      quat_a = quat_init_inverse*quat_a;
+    }
+    { Threads::Scope scope(state_mtx);
+      quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
+      quat_a = quat_init_inverse * quat_a;
   
       state[6] = quat_a.w();
       state[7] = quat_a.x();
@@ -478,37 +550,118 @@ void loop() {
     }
   }
 
-  memcpy(oneAdded, receivedCharsESP+2+28, 4*sizeof(char));
-  for (int i = 0; i < 4; i++) {
+  while (!ESP_connected) {threads.delay_us(100);}
+
+  ///////////////////Print Binary////////////////////
+  //  for (int i = 0; i < 34; i++) {
+  //    Serial.print(receivedCharsESP[i], BIN);
+  //    Serial.print(" ");
+  //  }
+  //  Serial.println();
+
+
+  //check if imu data is not corrupted
+//  int rt2 = koios->checkFrame(q0, q1, q2, q3, dY, dP, dR);
+  bool rt2 = abs(q0) < 2 && abs(q1)<2 && abs(q2)<2 && abs(q3)<2 && abs(dY) < 1e5 && abs(dP) < 1e5 && abs(dR) < 1e5;
+  //  Serial.println(rt2);
+  //based on imu upadate states
+  if (rt2 == 1) {
+    Q0 = q0;
+    Q1 = q1;
+    Q2 = q2;
+    Q3 = q3;
+    DY = dY;
+    DP = dP;
+    DR = dR;
+  }
+  koios->updateStates(x1, v1, x2, v2, x3, v3);
+  //  int new_contact = koios->getIntFromB();
+  //  if (new_contact != -1) {
+  //    contact = new_contact;
+  //  }
+  //  Serial.println(contact);
+  // Add step to get leg length from Bia here over serial
+  { Threads::Scope scope(state_mtx);
+    Threads::Scope scope2(foot_state_mtx);
+    state[0] = v1;
+    state[1] = v3;
+    state[2] = v2;
+    state[3] = DR;
+    state[4] = DP;
+    state[5] = DY;
+    state[6] = Q0;
+    state[7] = Q1;
+    state[8] = Q2;
+    state[9] = Q3;
+    state[10] = foot_state[0];
+    state[11] = foot_state[1];
+    state[12] = foot_state[2];
+
+//    Serial.print(state[0]); Serial.print(";  ");
+//    Serial.print(state[1]); Serial.print(";  ");
+//    Serial.print(state[2]); Serial.print(";  ");
+//    Serial.print(state[3]); Serial.print(";  ");
+//    Serial.print(state[4]); Serial.print(";  ");
+//    Serial.print(state[5]); Serial.print(";  ");
+//    Serial.print(state[6]); Serial.print(";  ");
+//    Serial.print(state[7]); Serial.print(";  ");
+//    Serial.print(state[8]); Serial.print(";  ");
+//    Serial.print(state[9]); Serial.print(";  ");
+//    Serial.print(state[10]); Serial.print(";  ");
+//    Serial.print(state[11]); Serial.print(";  ");
+//    Serial.print(state[12]); Serial.println(";  ");
+
+    state_tmp << state[9], state[6], state[7], state[8];
+    if (state_tmp.norm() > 1.05 || state_tmp.norm() < 0.95) {
+      Serial.print("Exiting because state norm was: ");
+      Serial.println(state_tmp.norm());
+      exitProgram();
+    }
+
+      quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
+      quat_a = quat_init_inverse * quat_a;
+
+      state[6] = quat_a.w();
+      state[7] = quat_a.x();
+      state[8] = quat_a.y();
+      state[9] = quat_a.z();
+  }
+
+  memcpy(oneAdded, receivedCharsESP + 40, 6 * sizeof(char));
+  for (int i = 0; i < 6; i++) {
     for (int j = 1; j < 8; j++) {
-      if(oneAdded[i] & (1 << (8-j))) {
-        receivedCharsESP[2+i*7+(j-1)] = 0;
+      if (oneAdded[i] & (1 << (8 - j))) {
+        receivedCharsESP[i * 7 + (j - 1)] = 0;
       }
     }
   }
 
-  float state_d[7];
-  memcpy(state_d, receivedCharsESP+2, 7*4);
+  float state_d[10];
+  memcpy(state_d, receivedCharsESP, 10 * 4);
 
   //////////////// Print the desired state ////////////////////////////
-//       Serial.print(state_d[0]); Serial.print(", ");
-//       Serial.print(state_d[1]); Serial.print(", ");
-//       Serial.print(state_d[2]); Serial.print(", ");
-//       Serial.print(state_d[3]); Serial.print(", ");
-//       Serial.print(state_d[4]); Serial.print(", ");
-//       Serial.print(state_d[5]); Serial.print(", ");
-//       Serial.print(state_d[6]);
-//       Serial.println();
+//         Serial.print(state_d[0]); Serial.print(", ");
+//         Serial.print(state_d[1]); Serial.print(", ");
+//         Serial.print(state_d[2]); Serial.print(", ");
+//         Serial.print(state_d[3]); Serial.print(", ");
+//         Serial.print(state_d[4]); Serial.print(", ");
+//         Serial.print(state_d[5]); Serial.print(", ");
+//         Serial.print(state_d[6]); Serial.print(", ");
+//         Serial.print(state_d[7]); Serial.print(", ");
+//         Serial.print(state_d[8]); Serial.print(", ");
+//         Serial.print(state_d[9]);
+//         Serial.println();
 
   quat_t quat_d = quat_t(state_d[0], state_d[1], state_d[2], state_d[3]);
   vector_3t omega_d = vector_3t(state_d[4], state_d[5], state_d[6]);
+  vector_3t tau_ff = vector_3t(state_d[7], state_d[8], state_d[9]);
 
   //use for the counication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
   //for a range of -1.6Nm to 1.6 Nm
-  vector_3t current; 
+  vector_3t current;
   if (initialized) {
-    getTorque(state, quat_d, omega_d, quat_a, current);  
+    getTorque(state, quat_d, omega_d, tau_ff, quat_a, current);
   } else {
     current[0] = 0;
     current[1] = 0;
@@ -525,20 +678,20 @@ void loop() {
   }
 
   if (reset_cmd) {
-    elmo.cmdTC(-0.1*v1,IDX_K1);
-    elmo.cmdTC(-0.1*v3,IDX_K2);
-    elmo.cmdTC(-0.1*v2,IDX_K3); 
+    elmo.cmdTC(-0.1 * v1, IDX_K1);
+    elmo.cmdTC(-0.1 * v3, IDX_K2);
+    elmo.cmdTC(-0.1 * v2, IDX_K3);
     if (abs(v1) < 0.01 && abs(v2) < 0.01 && abs(v3) < 0.01) {
       reset_cmd = 0;
     }
   } else {
-    elmo.cmdTC(current[0],IDX_K1);
-    elmo.cmdTC(current[1],IDX_K2);
-    elmo.cmdTC(current[2],IDX_K3); 
+        elmo.cmdTC(current[0],IDX_K1);
+        elmo.cmdTC(current[1],IDX_K2);
+        elmo.cmdTC(current[2],IDX_K3);
   }
-//  uint32_t Tc1 = micros();
-//  Serial.println(Tc1-Tc0);
+  //  uint32_t Tc1 = micros();
+  //  Serial.println(Tc1-Tc0);
 
- // send u4 current command to leg over serial RX/TX between teensy boards
-   delay(1);
+  // send u4 current command to leg over serial RX/TX between teensy boards
+  delay(1);
 }

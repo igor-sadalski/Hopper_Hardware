@@ -35,6 +35,8 @@ namespace Archer
       void flashA2(int Rep);
       void flashG(int Rep);
       int  checkSigK();
+      void sendIntToK(int send_val);
+      void sendCharArrToK(char* send_chars);
       void reverseSig(int val);
       void setSigK(int val);
       void waitSigK(int trigger);

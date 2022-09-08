@@ -27,6 +27,14 @@ float b0 = 0.75; // deflection to consider impact
 float u0 = -15.5; // offset torque
 int h = 0;
 float rb0,v0;
+volatile bool initialized;
+
+volatile char contact = 0;
+char footStateToKoios[1+2*4+2 + 1]; // contact, foot_state, bitAdded, newline
+float x = 0;
+float v = 0;
+float x_meters = 0;
+float v_meters = 0;
 
 void exitProgram() {
   rt = elmo.motorOff(IDX_BIA);
@@ -69,7 +77,7 @@ void setup() {
   bia.setSigK(0);
   delay(5000);
   bia.flashG(2);
-  delay(5000);
+  delay(7000);
 
   
   cBia.getRB0(rb0);
@@ -78,6 +86,43 @@ void setup() {
   T0 = micros();
   T1 = T0;
   bia.setLEDs("0001");
+
+  rt = threads.setSliceMicros(50);
+  contact = 0;
+  threads.addThread(KoiosCommThread);
+}
+
+std::mutex state_mtx;
+
+void KoiosCommThread() {
+  while(1) {
+    {std::lock_guard<std::mutex> lck(state_mtx);
+    footStateToKoios[0] = contact;
+    x_meters = x/1000;
+    v_meters = v/1000;
+    memcpy(footStateToKoios+1, &x_meters, 4);
+    memcpy(footStateToKoios+5, &v_meters, 4);
+    }
+    Serial.print((float)footStateToKoios[0]); Serial.print(";  ");
+    Serial.print(x_meters); Serial.print(";  ");
+    Serial.print(v_meters); Serial.println(";  ");
+
+    for (int i = 0; i < 2; i++) {
+      byte oneAdded = 0b00000001;
+      for (int j = 1; j < 8; j++){
+        if (footStateToKoios[i*7+(j-1)] == 0b00000000) {
+          footStateToKoios[i*7+(j-1)] = 0b00000001;
+          oneAdded += (1 << (8-j));
+        }
+      }
+      memcpy(&footStateToKoios[9+i], &oneAdded, 1);
+    }
+    footStateToKoios[11] = 0b0;
+
+    K_PORT.write(footStateToKoios);
+    K_PORT.flush();
+    threads.delay_us(1000);
+  }
 }
 
 void loop() {
@@ -85,7 +130,13 @@ void loop() {
 //  exitProgram();
   
   compPhase();    //
+  {std::lock_guard<std::mutex> lck(state_mtx);
+  contact = 1;
+  }
   releasePhase(); // control to rb = 0, end at xf = 0
+  {std::lock_guard<std::mutex> lck(state_mtx);
+  contact = 0;
+  }
   h++;
   if(h>=numHops){
     exitProgram();
@@ -93,28 +144,32 @@ void loop() {
 }
 
 void compPhase() {
-  float theta,omega,x,v,xfs;
+  float theta,omega,xfs;
   uint32_t Tc0 = micros();
   uint32_t Ts0,dTs;
   int i = 0;
+  Serial.println("------------Comp Phase---------------");
   
   bia.updateState(1,theta, omega); // theta and omega are motor angle and vel
   float theta_0 = theta;
   
   while(i<4) {
+    contact = 0;
     // WIFI ESTOP: 
     if (bia.checkSigK() == 1) {
       exitProgram();
     }
     // Update states:
     bia.updateState(1,theta, omega); // theta and omega are motor angle and vel
+    {std::lock_guard<std::mutex> lck(state_mtx);
     bia.updateState(2,x, v); // x and v are spring deflection in mm     
+    }
 
     float kp = 0.4;
     float kd = 0.04;
     float x_star = 30;
     u = -kp*(x - x_star) - kd*v;
-    Serial.println(x);
+//    Serial.println(x);
     if (theta-theta_0 >= 0.04) {
       exitProgram();
     }
@@ -209,7 +264,7 @@ void compPhase() {
 //
 void releasePhase(){
   uint32_t Tr0 = micros();
-  float r,w,x,v,up,ud;
+  float r,w,up,ud;
   int i = 0;
   Serial.println("------------Release Phase---------------");
   while(i<1){
@@ -222,7 +277,9 @@ void releasePhase(){
       i = 1;
       break;
     }
+    {std::lock_guard<std::mutex> lck(state_mtx);
     bia.testPDb(r,w,x,v,up,ud);
+    }
     rb = r;
     wb = w;
     vf = v;

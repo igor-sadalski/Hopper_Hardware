@@ -29,6 +29,7 @@ namespace Archer
       void initIMU();
       void initKoios1(int MC);
       void initKoios2();
+      int getIntFromB();
       void setLEDs(String val);
       void flashR(int Rep);
       void flashA1(int Rep);

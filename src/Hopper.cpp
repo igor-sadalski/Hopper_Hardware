@@ -85,61 +85,56 @@ void signal_callback_handler(int signum) {
 
 
 int sockfd, connfd;
-char buff[MSG_SIZE];
+char buff[60];
 char buffMAX[MSG_SIZE];
-char send_buff[34];
-float states[10];
+char send_buff[46];
+float states[13];
 
-vector_t state(10);
-float desstate[7];
+vector_t state(13);
+float desstate[10];
 std::mutex state_mtx;
 std::mutex des_state_mtx;
 
+volatile bool ESP_initialized = false;
+
 void getStateFromESP() {
   while(1) {
-  vector_t state_vec(10);
 
   //receive string states, ESP8266 -> PC
-  char start_msg[2] = {0,0};
-  std::bitset<8> x0(start_msg[0]);
-  std::bitset<8> x1(start_msg[1]);
   read(sockfd, buff, sizeof(buff));
-  char oneAdded[6];
-  memcpy(oneAdded, buff+42, 6*sizeof(char));
-  for (int i = 0; i < 6; i++) {
+  char oneAdded[8];
+  memcpy(oneAdded, buff+52, 8*sizeof(char));
+  for (int i = 0; i < 8; i++) {
     for (int j = 1; j < 8; j++) {
       if(oneAdded[i] & (1 << (8-j))) {
-        buff[i*7+(j-1)+2] = 0;
+        buff[i*7+(j-1)] = 0;
       }
     }
   }
   
-  memcpy(&states, buff+2, 10*sizeof(float));
+  memcpy(&states, buff, 13*sizeof(float));
   {std::lock_guard<std::mutex> lck(state_mtx);
-  state << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9];
+  state << states[0], states[1], states[2], states[3], states[4], states[5], states[6], states[7], states[8], states[9],states[10],states[11],states[12];
   }
  
   // encode send_buff
-  send_buff[0] = 0b11111111;
-  send_buff[1] = 0b11111111;
   {std::lock_guard<std::mutex> lck(des_state_mtx);
-  memcpy(send_buff+2, desstate, 7*4);
+  memcpy(send_buff, desstate, 10*4);
   }
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 6; i++) {
       char oneAdded = 0b00000001;
       for (int j = 1; j < 8; j++){
-        if (send_buff[i*7+(j-1)+2] == 0b00000000) {
-          send_buff[i*7+(j-1)+2] = 0b00000001;
+        if (send_buff[i*7+(j-1)] == 0b00000000) {
+          send_buff[i*7+(j-1)] = 0b00000001;
           oneAdded += (1 << (8-j));
         }
       }
-      memcpy(&send_buff[28+i+2], &oneAdded, 1);
+      memcpy(&send_buff[40+i], &oneAdded, 1);
   }
   
   write(sockfd, send_buff, sizeof(send_buff));		
+  ESP_initialized = true;
   }
-
-  //return state_vec;
 }
 
 void setupSocket() {
@@ -180,9 +175,9 @@ int main(int argc, char **argv)
 	//torques to currents, assumes torques is an array of floats
 	scalar_t const_wheels = 0.083;
 	bool init = false;
-	vector_t state_init(10);
+	vector_t state_init(13);
 	state.setZero();
-        vector_t state_vec(10); //states + 1
+        vector_t state_vec(13); 
 
         bool fileWrite = true;
         std::string dataLog = "../data/data.csv";
@@ -205,16 +200,21 @@ int main(int argc, char **argv)
         desstate[4] = 0;
         desstate[5] = 0;
         desstate[6] = 0;
+        desstate[7] = 0;
+        desstate[8] = 0;
+        desstate[9] = 0;
 
 	std::thread thread_object(getStateFromESP);
 
+	while(!ESP_initialized) {};
+
         // ROS stuff
-	//ros::init(argc, argv, "listener");
-	//ros::NodeHandle n;
-	//ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
-	//while(ros::ok()){
-          //ros::spinOnce();
-	while(1) {
+	ros::init(argc, argv, "listener");
+	ros::NodeHandle n;
+	ros::Subscriber sub = n.subscribe("/vrpn_client_node/hopper/pose", 200, chatterCallback);
+	while(ros::ok()){
+          ros::spinOnce();
+	//while(1) {
           t1 = std::chrono::high_resolution_clock::now();
           
 	  { std::lock_guard<std::mutex> lck(state_mtx);
@@ -254,6 +254,9 @@ int main(int argc, char **argv)
           scalar_t wd_x = 0;
           scalar_t wd_y = 0;
           scalar_t wd_z = 0;
+          scalar_t tau_0 = 1;
+          scalar_t tau_1 = 2;
+          scalar_t tau_2 = 3;
           
 	  { std::lock_guard<std::mutex> lck(des_state_mtx);
           desstate[0] = qd_w;
@@ -263,6 +266,9 @@ int main(int argc, char **argv)
           desstate[4] = wd_x;
           desstate[5] = wd_y;
           desstate[6] = wd_z;
+          desstate[7] = tau_0;
+          desstate[8] = tau_1;
+          desstate[9] = tau_2;
 	  }
 
           t2 = std::chrono::high_resolution_clock::now();

@@ -46,6 +46,15 @@ namespace Archer
     return rt;
   }
 
+  void Bia::sendIntToK(int send_val) {
+    K_PORT.write(send_val);
+  }
+
+  void Bia::sendCharArrToK(char* send_chars) {
+    K_PORT.write(send_chars);
+    K_PORT.flush();
+  }
+
   void Bia::initSD(){
     Serial.print("Initializing SD card...");
     if(!SD.begin(BUILTIN_SDCARD)){

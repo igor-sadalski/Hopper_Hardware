@@ -58,6 +58,19 @@ namespace Archer
     return rt;
   }
 
+  int Koios::getIntFromB() {
+    int ret_val = 0;
+    if (B_PORT.available() > 0) {
+      while (B_PORT.available() > 0) {
+        ret_val = B_PORT.read();	
+      }
+      return ret_val;
+    } else {
+      return -1;
+    }
+  } 
+
+
   void Koios::initSD(){
     Serial.print("Initializing SD card..");
     if(!SD.begin(BUILTIN_SDCARD)){
