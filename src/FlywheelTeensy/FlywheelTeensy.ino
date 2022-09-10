@@ -529,83 +529,50 @@ void loop() {
     }
     state_tmp << (float)state[9], (float)state[6], (float)state[7], (float)state[8];
     if (state_tmp.norm() > 0.95 && state_tmp.norm() < 1.05) {
-//      vector_4t quat_vec = vector_4t((float)state[9], (float)state[6], (float)state[7], (float)state[8]);
-//      vector_3t log_quat_vec;
-//      log_quat_vec = quat_vec.segment(1,3)/quat_vec.segment(1,3).norm()*acos(quat_vec(0)/quat_vec.norm());
-//      vector_3t xi_0;
-//      xi_0 << r_offset, p_offset+1.5708, log_quat_vec(2);
-//      vector_4t quat_init_vec;
-//      quat_init_vec << cos(xi_0.norm()), xi_0/xi_0.norm()*sin(xi_0.norm());
-//      quat_init = quat_t(quat_init_vec(0), quat_init_vec(1), quat_init_vec(2), quat_init_vec(3));
-//
-//      Serial.println();
-//      Serial.print(log_quat_vec[0]); Serial.print(", ");
-//      Serial.print(log_quat_vec[1]); Serial.print(", ");
-//      Serial.print(log_quat_vec[2]); Serial.print(", ");
-//      Serial.println();
-//      Serial.print(xi_0[0]); Serial.print(", ");
-//      Serial.print(xi_0[1]); Serial.print(", ");
-//      Serial.print(xi_0[2]); Serial.print(", ");
-//      Serial.println();
-//      Serial.println();
-//            
-//      Serial.print(state[9]); Serial.print(", ");
-//      Serial.print(state[6]); Serial.print(", ");
-//      Serial.print(state[7]); Serial.print(", ");
-//      Serial.print(state[8]); Serial.print(", ");
-//      Serial.println();
-//      Serial.println();
-//
-//      Serial.print(quat_init.w()); Serial.print(", ");
-//      Serial.print(quat_init.x()); Serial.print(", ");
-//      Serial.print(quat_init.y()); Serial.print(", ");
-//      Serial.print(quat_init.z()); Serial.print(", ");
-//      Serial.println();
 
-      quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
-
-           // roll (x-axis rotation)
-      float sinr_cosp = 2 * (quat_a.w() * quat_a.x() + quat_a.y() * quat_a.z());
-      float cosr_cosp = 1 - 2 * (quat_a.x() * quat_a.x() + quat_a.y() * quat_a.y());
-      float roll = std::atan2(sinr_cosp, cosr_cosp);
-
-      // pitch (y-axis rotation)
-      float sinp = 2 * (quat_a.w() * quat_a.y() - quat_a.z() * quat_a.x());
-      float pitch;
-      if (std::abs(sinp) >= 1)
-          pitch = std::copysign(M_PI / 2, sinp); // use 90 degrees if out of range
-      else
-          pitch = std::asin(sinp);
+    
 
       // yaw (z-axis rotation)
+      quat_a = quat_t(state[9], state[6], state[7], state[8]);
       float siny_cosp = 2 * (quat_a.w() * quat_a.z() + quat_a.x() * quat_a.y());
       float cosy_cosp = 1 - 2 * (quat_a.y() * quat_a.y() + quat_a.z() * quat_a.z());
       float yaw = std::atan2(siny_cosp, cosy_cosp);
-
+      float sinr_cosp = 2 * (quat_a.w() * quat_a.x() + quat_a.y() * quat_a.z());
+      float cosr_cosp = 1 - 2 * (quat_a.x() * quat_a.x() + quat_a.y() * quat_a.y());
+      float roll = std::atan2(sinr_cosp, cosr_cosp);
       static float r_offset = 0.002;
-      static float p_offset = -0.02;
+      static float p_offset = -0.022;
 
       float cy = cos(yaw * 0.5);
       float sy = sin(yaw * 0.5);
       float cp = cos((p_offset) * 0.5);
       float sp = sin((p_offset) * 0.5);
-      float cr = cos(((-1*(roll<0))*3.14+r_offset) * 0.5);
-      float sr = sin(((-1*(roll<0))*3.14+r_offset) * 0.5);
 
+      float cr = cos((-3.14+r_offset) * 0.5);
+      float sr = sin((-3.14+r_offset) * 0.5);
       quat_t q;
       q.w() = cr * cp * cy + sr * sp * sy;
       q.x() = sr * cp * cy - cr * sp * sy;
       q.y() = cr * sp * cy + sr * cp * sy;
-      q.z() = cr * cp * sy - sr * sp * cy;
-      
+      q.z() = cr * cp * sy - sr * sp * cy;   
+//      if (q.w() < 0) {
+//        q = q.conjugate();
+//        q.w() = -q.w();
+//      }  
+
+      quat_init = q;
 //      quat_init = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]);
-      quat_init  = q;
+      
       quat_init_inverse = quat_init.inverse();
       initialized = true;
       koios->setLogo('G');
     }
     { Threads::Scope scope(state_mtx);
       quat_a = quat_init_inverse * quat_a;
+      if (quat_a.w() < 0) {
+        quat_a = quat_a.conjugate();
+        quat_a.w() = -quat_a.w();
+      }  
   
       state[6] = quat_a.w();
       state[7] = quat_a.x();
@@ -684,17 +651,15 @@ void loop() {
 
       quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
       quat_a = quat_init_inverse * quat_a;
-      
-      Serial.print(quat_a.w()); Serial.print(", ");
-      Serial.print(quat_a.x()); Serial.print(", ");
-      Serial.print(quat_a.y()); Serial.print(", ");
-      Serial.print(quat_a.z()); Serial.print(",                    ");
-//      Serial.print(roll); Serial.print(", ");
-//      Serial.print(pitch); Serial.print(", ");
-//      Serial.print(yaw); Serial.print(", ");
-      Serial.println();
-      
-      
+      if (quat_a.w() < 0) {
+        quat_a = quat_a.conjugate();
+        quat_a.w() = -quat_a.w();
+      }  
+
+      Serial.print(quat_a.w()); Serial.print(";  ");
+      Serial.print(quat_a.x()); Serial.print(";  ");
+      Serial.print(quat_a.y()); Serial.print(";  ");
+      Serial.print(quat_a.z()); Serial.println(";  ");
 
       state[6] = quat_a.w();
       state[7] = quat_a.x();
@@ -763,9 +728,9 @@ void loop() {
       reset_cmd = 0;
     }
   } else {
-        elmo.cmdTC(current[0],IDX_K1);
-        elmo.cmdTC(current[1],IDX_K2);
-        elmo.cmdTC(current[2],IDX_K3);
+      elmo.cmdTC(current[0],IDX_K1);
+      elmo.cmdTC(current[1],IDX_K2);
+      elmo.cmdTC(current[2],IDX_K3);
   }
   //  uint32_t Tc1 = micros();
   //  Serial.println(Tc1-Tc0);
