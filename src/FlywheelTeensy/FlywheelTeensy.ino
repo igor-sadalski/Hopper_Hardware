@@ -12,6 +12,7 @@
 #include <string.h>
 
 //#define TEST_TEENSY
+#define IMU_TEST
 
 using namespace Archer;
 using namespace Eigen;
@@ -120,14 +121,18 @@ void setup() {
   delay(250);
   koios->STO(1);
   koios->waitSwitch(1); //manual switch on robot
+  #ifndef IMU_TEST
   koios->setSigB(1);
+  #endif
   delay(250);
   rt = koios->motorsOn();
   delay(5000);
   koios->resetStates();
   koios->setLEDs("0100");
   koios->waitSwitch(0);
+  #ifndef IMU_TEST
   koios->setSigB(0);
+  #endif
   koios-> setLogo('A');
   koios->flashG(2);
 #endif
@@ -468,7 +473,9 @@ void exitProgram() {
   elmo.cmdTC(0.0, IDX_K2);
   elmo.cmdTC(0.0, IDX_K3);
   koios->motorsOff(0);
+  #ifndef IMU_TEST
   koios->setSigB(1);
+  #endif
   koios->setLEDs("1000");
   koios->setLogo('R');
   while (1) {};
@@ -534,7 +541,36 @@ void loop() {
       Serial.print(state[7]); Serial.print(", ");
       Serial.print(state[8]); Serial.print(", ");
       Serial.println();
-      quat_init = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]);
+
+      // yaw (z-axis rotation)
+      quat_a = quat_t(state[9], state[6], state[7], state[8]);
+      float siny_cosp = 2 * (quat_a.w() * quat_a.z() + quat_a.x() * quat_a.y());
+      float cosy_cosp = 1 - 2 * (quat_a.y() * quat_a.y() + quat_a.z() * quat_a.z());
+      float yaw = std::atan2(siny_cosp, cosy_cosp);
+      float sinr_cosp = 2 * (quat_a.w() * quat_a.x() + quat_a.y() * quat_a.z());
+      float cosr_cosp = 1 - 2 * (quat_a.x() * quat_a.x() + quat_a.y() * quat_a.y());
+      float roll = std::atan2(sinr_cosp, cosr_cosp);
+      static float r_offset = 0.002;
+      static float p_offset = -0.022;
+      float cy = cos(yaw * 0.5);
+      float sy = sin(yaw * 0.5);
+      float cp = cos((p_offset) * 0.5);
+      float sp = sin((p_offset) * 0.5);
+      float cr = cos((-3.14+r_offset) * 0.5);
+      float sr = sin((-3.14+r_offset) * 0.5);
+      quat_t q;
+      q.w() = cr * cp * cy + sr * sp * sy;
+      q.x() = sr * cp * cy - cr * sp * sy;
+      q.y() = cr * sp * cy + sr * cp * sy;
+      q.z() = cr * cp * sy - sr * sp * cy;   
+//      if (q.w() < 0) {
+//        q = q.conjugate();
+//        q.w() = -q.w();
+//      }  
+
+      quat_init = q;
+//      quat_init = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]);
+      
       quat_init_inverse = quat_init.inverse();
       initialized = true;
       koios->setLogo('G');
@@ -542,6 +578,10 @@ void loop() {
     { Threads::Scope scope(state_mtx);
       quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
       quat_a = quat_init_inverse * quat_a;
+      if (quat_a.w() < 0) {
+        quat_a = quat_a.conjugate();
+        quat_a.w() = -quat_a.w();
+      }  
   
       state[6] = quat_a.w();
       state[7] = quat_a.x();
@@ -550,7 +590,9 @@ void loop() {
     }
   }
 
+  #ifndef IMU_TEST
   while (!ESP_connected) {threads.delay_us(100);}
+  #endif
 
   ///////////////////Print Binary////////////////////
   //  for (int i = 0; i < 34; i++) {
@@ -620,6 +662,15 @@ void loop() {
 
       quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
       quat_a = quat_init_inverse * quat_a;
+      if (quat_a.w() < 0) {
+        quat_a = quat_a.conjugate();
+        quat_a.w() = -quat_a.w();
+      }  
+
+      Serial.print(quat_a.w()); Serial.print(";  ");
+      Serial.print(quat_a.x()); Serial.print(";  ");
+      Serial.print(quat_a.y()); Serial.print(";  ");
+      Serial.print(quat_a.z()); Serial.println(";  ");
 
       state[6] = quat_a.w();
       state[7] = quat_a.x();
@@ -652,9 +703,12 @@ void loop() {
 //         Serial.print(state_d[9]);
 //         Serial.println();
 
-  quat_t quat_d = quat_t(state_d[0], state_d[1], state_d[2], state_d[3]);
-  vector_3t omega_d = vector_3t(state_d[4], state_d[5], state_d[6]);
-  vector_3t tau_ff = vector_3t(state_d[7], state_d[8], state_d[9]);
+//  quat_t quat_d = quat_t(state_d[0], state_d[1], state_d[2], state_d[3]);
+//  vector_3t omega_d = vector_3t(state_d[4], state_d[5], state_d[6]);
+//  vector_3t tau_ff = vector_3t(state_d[7], state_d[8], state_d[9]);
+  quat_t quat_d = quat_t(1,0,0,0);
+  vector_3t omega_d = vector_3t(0,0,0);
+  vector_3t tau_ff = vector_3t(0,0,0);
 
   //use for the counication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
@@ -685,9 +739,11 @@ void loop() {
       reset_cmd = 0;
     }
   } else {
+//        #ifndef IMU_TEST
         elmo.cmdTC(current[0],IDX_K1);
         elmo.cmdTC(current[1],IDX_K2);
         elmo.cmdTC(current[2],IDX_K3);
+//        #endif
   }
   //  uint32_t Tc1 = micros();
   //  Serial.println(Tc1-Tc0);
