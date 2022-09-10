@@ -12,7 +12,6 @@
 #include <string.h>
 
 //#define TEST_TEENSY
-#define IMU_TEST
 
 using namespace Archer;
 using namespace Eigen;
@@ -121,18 +120,14 @@ void setup() {
   delay(250);
   koios->STO(1);
   koios->waitSwitch(1); //manual switch on robot
-  #ifndef IMU_TEST
   koios->setSigB(1);
-  #endif
   delay(250);
   rt = koios->motorsOn();
   delay(5000);
   koios->resetStates();
   koios->setLEDs("0100");
   koios->waitSwitch(0);
-  #ifndef IMU_TEST
   koios->setSigB(0);
-  #endif
   koios-> setLogo('A');
   koios->flashG(2);
 #endif
@@ -473,9 +468,7 @@ void exitProgram() {
   elmo.cmdTC(0.0, IDX_K2);
   elmo.cmdTC(0.0, IDX_K3);
   koios->motorsOff(0);
-  #ifndef IMU_TEST
   koios->setSigB(1);
-  #endif
   koios->setLEDs("1000");
   koios->setLogo('R');
   while (1) {};
@@ -590,9 +583,7 @@ void loop() {
     }
   }
 
-  #ifndef IMU_TEST
   while (!ESP_connected) {threads.delay_us(100);}
-  #endif
 
   ///////////////////Print Binary////////////////////
   //  for (int i = 0; i < 34; i++) {
@@ -703,12 +694,12 @@ void loop() {
 //         Serial.print(state_d[9]);
 //         Serial.println();
 
-//  quat_t quat_d = quat_t(state_d[0], state_d[1], state_d[2], state_d[3]);
-//  vector_3t omega_d = vector_3t(state_d[4], state_d[5], state_d[6]);
-//  vector_3t tau_ff = vector_3t(state_d[7], state_d[8], state_d[9]);
-  quat_t quat_d = quat_t(1,0,0,0);
-  vector_3t omega_d = vector_3t(0,0,0);
-  vector_3t tau_ff = vector_3t(0,0,0);
+  quat_t quat_d = quat_t(state_d[0], state_d[1], state_d[2], state_d[3]);
+  vector_3t omega_d = vector_3t(state_d[4], state_d[5], state_d[6]);
+  vector_3t tau_ff = vector_3t(state_d[7], state_d[8], state_d[9]);
+//  quat_t quat_d = quat_t(1,0,0,0);
+//  vector_3t omega_d = vector_3t(0,0,0);
+//  vector_3t tau_ff = vector_3t(0,0,0);
 
   //use for the counication with the wheel motors
   //convert torques to amps with torque / 0.083 = currents [A]
@@ -739,11 +730,9 @@ void loop() {
       reset_cmd = 0;
     }
   } else {
-//        #ifndef IMU_TEST
-        elmo.cmdTC(current[0],IDX_K1);
-        elmo.cmdTC(current[1],IDX_K2);
-        elmo.cmdTC(current[2],IDX_K3);
-//        #endif
+      elmo.cmdTC(current[0],IDX_K1);
+      elmo.cmdTC(current[1],IDX_K2);
+      elmo.cmdTC(current[2],IDX_K3);
   }
   //  uint32_t Tc1 = micros();
   //  Serial.println(Tc1-Tc0);
