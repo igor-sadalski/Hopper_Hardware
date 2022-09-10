@@ -50,7 +50,7 @@ using quat_t = Eigen::Quaternion<float>;
 // 10x gain caused massive chatter
 // These gains have almost no tracking
 #define kp_y 15.0
-#define kp_rp 120.0
+#define kp_rp 180.0
 #define kd_y 1.0
 #define kd_rp 4.0 // 6 is better, but then I need a filter.
 
@@ -529,11 +529,8 @@ void loop() {
     }
     state_tmp << (float)state[9], (float)state[6], (float)state[7], (float)state[8];
     if (state_tmp.norm() > 0.95 && state_tmp.norm() < 1.05) {
-      Serial.print(state[9]); Serial.print(", ");
-      Serial.print(state[6]); Serial.print(", ");
-      Serial.print(state[7]); Serial.print(", ");
-      Serial.print(state[8]); Serial.print(", ");
-      Serial.println();
+
+    
 
       // yaw (z-axis rotation)
       quat_a = quat_t(state[9], state[6], state[7], state[8]);
@@ -545,10 +542,12 @@ void loop() {
       float roll = std::atan2(sinr_cosp, cosr_cosp);
       static float r_offset = 0.002;
       static float p_offset = -0.022;
+
       float cy = cos(yaw * 0.5);
       float sy = sin(yaw * 0.5);
       float cp = cos((p_offset) * 0.5);
       float sp = sin((p_offset) * 0.5);
+
       float cr = cos((-3.14+r_offset) * 0.5);
       float sr = sin((-3.14+r_offset) * 0.5);
       quat_t q;
@@ -569,7 +568,6 @@ void loop() {
       koios->setLogo('G');
     }
     { Threads::Scope scope(state_mtx);
-      quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
       quat_a = quat_init_inverse * quat_a;
       if (quat_a.w() < 0) {
         quat_a = quat_a.conjugate();
@@ -649,7 +647,7 @@ void loop() {
       Serial.print("Exiting because state norm was: ");
       Serial.println(state_tmp.norm());
       exitProgram();
-    }
+    }      
 
       quat_a = quat_t((float)state[9], (float)state[6], (float)state[7], (float)state[8]); // assuming q_w is last.
       quat_a = quat_init_inverse * quat_a;
